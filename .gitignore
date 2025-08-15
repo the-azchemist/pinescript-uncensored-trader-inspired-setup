@@ -1,12 +1,25 @@
-# OS / Editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-
-# Python/Node
-__pycache__/
-node_modules/
-
-# Arsip
+*.code-workspace
+*.log
+*.tmp
+*.temp
 *.zip
+*.rar
+*.7z
+/dist/
+/build/
+/release/
+/out/
+*~
+*.bak
+*.old
+ehthumbs.db
+Icon?
+Desktop.ini
+node_modules/
+npm-debug.log*
+.venv/
+env/
