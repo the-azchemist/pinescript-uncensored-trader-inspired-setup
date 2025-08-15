@@ -10,4 +10,4 @@ Semua perubahan signifikan pada proyek ini akan didokumentasikan di sini.
 - Visualisasi Market Structure, BOS, dan Liquidity Zones.
 
 ### Security
-- Password tidak lagi disimpan di kode (akses via input langsung).
+- Password aktivasi script (akses via input langsung).
