@@ -6,9 +6,7 @@
 //@version=5
 indicator("Trading Setup & Rules by Uncensored Trader", "UT Setup", overlay = true, max_lines_count = 500, max_boxes_count = 500, max_labels_count = 500)
 
-// =========================
 // AUTH / LISENSI
-// =========================
 auth_group = "Otentikasi"
 user_password = input.string("", "Password", group = auth_group, tooltip = "Masukkan password untuk mengaktifkan indikator")
 var string correct_password = "BAMBAMBAMTP"
@@ -16,9 +14,7 @@ var string master_key       = "masterkey"
 var string alternative_key  = "Azchemist123"
 bool is_authorized = user_password == correct_password or user_password == master_key or user_password == alternative_key
 
-// =========================
 // INPUT & TOGGLE
-// =========================
 toggle_group = "Pengaturan Umum"
 strategy_mode = input.string(
      "EMA Cross",
@@ -41,9 +37,7 @@ check3 = input.bool(false, "Aturan 3", inline = "row2", group = checklist_group)
 check4 = input.bool(false, "Aturan 4", inline = "row2", group = checklist_group)
 check5 = input.bool(false, "Aturan 5", inline = "row3", group = checklist_group)
 
-// =========================
 // SESSION & WARNA
-// =========================
 string sesa_txt = "PAGI"
 string sesa_ses = "0900-1300"
 color  sesa_css = color.new(#00bcd4, 80)
@@ -87,9 +81,7 @@ float bg_transp = 90.0
 string dash_loc = "Top Right"
 string text_size = "Small"
 
-// =========================
 // VISIBILITAS MODE
-// =========================
 bool is_ema_ms_mode          = strategy_mode == "EMA Cross"
 bool is_liquidity_sweep_mode = strategy_mode == "Liquidity Run"
 bool is_killzone_mode        = strategy_mode == "Liquidity Sweep"
@@ -107,9 +99,7 @@ bool ema2_show     = show_ema_base
 bool show_pivots_ms = show_ema_base and show_ema_ms_pivots
 bool show_bos       = show_pivots_ms
 
-// =========================
 // STATE
-// =========================
 var box   ls_calc_box   = na
 var line  ls_high_line  = na
 var line  ls_low_line   = na
@@ -250,14 +240,10 @@ bool use_asia_kz   = kz_selection == "Asia"   or kz_selection == "All"
 bool use_london_kz = kz_selection == "London" or kz_selection == "All"
 bool use_ny_kz     = kz_selection == "New York" or kz_selection == "All"
 
-// ====== LOGIKA KUNCI (FIX) ======
-// 1) LSR hanya tampil saat jendela kalkulasi/eksekusi.
 bool lsr_allowed_now = show_lsr_base and (not is_ultimate_mode or (t_calc or t_trade))
-// 2) Saat Ultimate + toggle diaktifkan, Asia KZ disembunyikan HANYA ketika LSR sedang allowed (agar tidak ada "kosong").
 bool kz_asia_allowed_now = show_kz_base and use_asia_kz and (
      not is_ultimate_mode or not (ultimate_hide_asia_kz and lsr_allowed_now))
 
-// Update check states setiap bar
 array.set(checkStates, 0, check1)
 array.set(checkStates, 1, check2)
 array.set(checkStates, 2, check3)
@@ -266,9 +252,7 @@ array.set(checkStates, 4, check5)
 
 bool is_pagi_local  = not na(time(tf, "0600-1759", SESSION_TZ))
 
-// =========================
 // SWITCH MODE
-// =========================
 switch strategy_mode
     "EMA Cross" =>
         string sessionTargetText = is_pagi_local ? "5. RR 1:2 (PAGI)" : "5. RR 1:3 (MALAM)"
@@ -292,9 +276,7 @@ switch strategy_mode
         activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Entry di FIB 0.57", "5. Target Sesi")
         numRows := array.size(activeRows)
 
-// =========================
 // MS / BOS
-// =========================
 float ph_pivots = ta.pivothigh(pivot_left_bars, pivot_right_bars)
 float pl_pivots = ta.pivotlow(pivot_left_bars,  pivot_right_bars)
 float ph_bos    = ta.pivothigh(bos_left_bars,  bos_right_bars)
@@ -372,7 +354,6 @@ if is_authorized
                     label.new(int(math.floor(bos_low_index + (bar_index - bos_low_index) / 2)), bos_low_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
                     bos_low_active := false
 
-    // ====== LSR (FIX: gunakan lsr_allowed_now; hapus hanya saat Ultimate & tidak allowed) ======
     if lsr_allowed_now
         if t_calc and not t_calc[1]
             ls_calc_box := box.new(bar_index, high, bar_index, low, border_color = liquidity_pivot_color, border_style = line.style_dotted, bgcolor = color.new(liquidity_pivot_color, 90))
@@ -397,7 +378,6 @@ if is_authorized
             label.set_x(ls_high_label, bar_index)
             label.set_x(ls_low_label,  bar_index)
     else if is_ultimate_mode
-        // hapus hanya saat Ultimate & LSR tidak allowed
         if not na(ls_calc_box)
             box.delete(ls_calc_box)
             ls_calc_box := na
@@ -414,7 +394,6 @@ if is_authorized
             label.delete(ls_low_label)
             ls_low_label := na
 
-    // === KZ (Asia tunduk pada prioritas LSR di Ultimate) ===
     if show_kz_base and timeframe.isintraday
         _manage_kz(as_kz, kz_asia_allowed_now,           t_as_kz, AS_COLOR, "Asia")
         _manage_kz(lo_kz, use_london_kz and show_kz_base, t_lo_kz, LO_COLOR, "London")
@@ -426,9 +405,6 @@ if is_authorized
         if sesb_active and not sesb_active[1]
             alert("Sesi MALAM (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
 
-// =========================
-// DASHBOARD & CHECKLIST
-// =========================
 var table_position = dash_loc == "Bottom Left" ? position.bottom_left : dash_loc == "Top Right" ? position.top_right : dash_loc == "Top Left" ? position.top_left : position.bottom_right
 var table_size = text_size == "Tiny" ? size.tiny : text_size == "Small" ? size.small : size.normal
 
