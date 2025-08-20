@@ -1,20 +1,28 @@
-// Azchemist Proprietary License — Version 1.0 (August 15, 2025)
-// Copyright (c) 2025 Azchemist. All rights reserved.
-// DILARANG KERAS menyalin/menyebarkan tanpa izin tertulis.
-// Kontak: theazchemist@gmail.com
+//Azchemist Proprietary License — Version 1.4 Fixed (August 20, 2025)
+//Copyright (c) 2025 Azchemist. All rights reserved.
+
+//DILARANG KERAS:
+//- Menyalin, memodifikasi, menggabungkan, menerbitkan, mendistribusikan,
+//  menjual, atau menyewakan salinan kode ini.
+//- Menggunakan kode ini untuk tujuan komersial atau non-komersial tanpa
+//  izin tertulis dari pemilik hak cipta.
+
+//PERIZINAN:
+//Hak penggunaan hanya untuk pihak yang telah memperoleh lisensi resmi dari Azchemist.
+//Lisensi bersifat pribadi, non‑transferable, dan non‑eksklusif kecuali dinyatakan lain.
+
+//SANKSI:
+//Pelanggaran akan dikenakan tindakan hukum sesuai yurisdiksi pemilik hak cipta.
+
+//Kontak Lisensi: theazchemist@gmail.com
 
 //@version=5
 indicator("Trading Setup & Rules by Uncensored Trader", "UT Setup", overlay = true, max_lines_count = 500, max_boxes_count = 500, max_labels_count = 500)
 
-// AUTH / LISENSI
+// --- Pengaturan & Input ---
 auth_group = "Otentikasi"
 user_password = input.string("", "Password", group = auth_group, tooltip = "Masukkan password untuk mengaktifkan indikator")
-var string correct_password = "BAMBAMBAMTP"
-var string master_key       = "masterkey"
-var string alternative_key  = "Azchemist123"
-bool is_authorized = user_password == correct_password or user_password == master_key or user_password == alternative_key
 
-// INPUT & TOGGLE
 toggle_group = "Pengaturan Umum"
 strategy_mode = input.string(
      "EMA Cross",
@@ -37,16 +45,24 @@ check3 = input.bool(false, "Aturan 3", inline = "row2", group = checklist_group)
 check4 = input.bool(false, "Aturan 4", inline = "row2", group = checklist_group)
 check5 = input.bool(false, "Aturan 5", inline = "row3", group = checklist_group)
 
-// SESSION & WARNA
+// --- Variabel & Konstanta ---
+// Otentikasi
+var string correct_password      = "BAMBAMBAMTP"
+var string master_key            = "masterkey"
+var string alternative_key       = "Azchemist123"
+bool is_authorized = user_password == correct_password or user_password == master_key or user_password == alternative_key
+
+// Sesi Pagi/Malam
 string sesa_txt = "PAGI"
 string sesa_ses = "0900-1300"
 color  sesa_css = color.new(#00bcd4, 80)
 string sesb_txt = "MALAM"
-string sesb_ses = "2000-2059"
+string sesb_ses = "2000-2300"
 color  sesb_css = color.new(#2962ff, 80)
-
 string SESSION_TZ  = "Asia/Jakarta"
-string KZ_TIMEZONE = "GMT-4" // KZ memakai referensi NY (ICT-style)
+
+// Sesi Killzone & Liquidity
+string KZ_TIMEZONE = "GMT-4"
 int    MAX_DAYS_KZ = 60
 string kz_asia_session   = "2000-0000"
 string kz_london_session = "0200-0500"
@@ -55,23 +71,18 @@ color  AS_COLOR = #ff9800
 color  LO_COLOR = #9c27b0
 color  NA_COLOR = #00bcd4
 int    BOX_TRANSPARENCY_KZ = 95
-
-string sweep_calc_session  = "0600-0900"   // Jakarta time — kalkulasi range
-string sweep_trade_session = "0900-1300"   // Jakarta time — eksekusi
+string sweep_calc_session  = "0600-0900"
+string sweep_trade_session = "0900-1300"
 color  liquidity_pivot_color = color.new(color.red, 0)
 
-string ema_tf = "5"
+// Pengaturan EMA
+string ema_tf = "1"
 int    ema_fast_len = 9
 int    ema_slow_len = 21
-int    ema1_len = 9
-float  ema1_src = close
-int    ema1_offset = 0
 color  ema1_color = color.new(#414852, 0)
-int    ema2_len = 21
-float  ema2_src = close
-int    ema2_offset = 0
 color  ema2_color = color.new(#9299a2, 0)
 
+// Pengaturan Tampilan & Lainnya
 bool  show_alerts = true
 int   pivot_left_bars = 15
 int   pivot_right_bars = 15
@@ -81,17 +92,19 @@ float bg_transp = 90.0
 string dash_loc = "Top Right"
 string text_size = "Small"
 
-// VISIBILITAS MODE
+// --- Logika Mode Strategi ---
 bool is_ema_ms_mode          = strategy_mode == "EMA Cross"
-bool is_liquidity_sweep_mode = strategy_mode == "Liquidity Run"
-bool is_killzone_mode        = strategy_mode == "Liquidity Sweep"
+bool is_liquidity_run_mode   = strategy_mode == "Liquidity Run"
+bool is_liquidity_sweep_mode = strategy_mode == "Liquidity Sweep"
 bool is_ultimate_mode        = strategy_mode == "Ultimate Setup"
 bool is_hybrid_mode          = strategy_mode == "Hybrid Setup"
 
+// Kondisi untuk menampilkan elemen berdasarkan mode
 bool show_ema_base = is_ema_ms_mode or is_ultimate_mode or is_hybrid_mode
-bool show_lsr_base = is_liquidity_sweep_mode or is_ultimate_mode or is_hybrid_mode
-bool show_kz_base  = is_killzone_mode or is_ultimate_mode
+bool show_lsr_base = is_liquidity_run_mode or is_ultimate_mode or is_hybrid_mode
+bool show_kz_base  = is_liquidity_sweep_mode or is_ultimate_mode
 
+// Kondisi turunan
 bool show_outline  = show_ema_base
 bool show_txt      = show_ema_base
 bool ema1_show     = show_ema_base
@@ -99,7 +112,7 @@ bool ema2_show     = show_ema_base
 bool show_pivots_ms = show_ema_base and show_ema_ms_pivots
 bool show_bos       = show_pivots_ms
 
-// STATE
+// --- Variabel State (var) ---
 var box   ls_calc_box   = na
 var line  ls_high_line  = na
 var line  ls_low_line   = na
@@ -108,7 +121,7 @@ var label ls_low_label  = na
 var float ls_high_price = na
 var float ls_low_price  = na
 
-// KZ struct
+// Tipe data custom untuk Killzone
 type kz
     string _title
     box[]  _box
@@ -117,24 +130,31 @@ type kz
     bool[] _hi_valid
     bool[] _lo_valid
 
-var as_kz = kz.new("Asia",     array.new_box(), array.new_line(), array.new_line(), array.new_bool(), array.new_bool())
-var lo_kz = kz.new("London",   array.new_box(), array.new_line(), array.new_line(), array.new_bool(), array.new_bool())
-var na_kz = kz.new("New York", array.new_box(), array.new_line(), array.new_line(), array.new_bool(), array.new_bool())
+var as_kz = kz.new("Asia",    array.new_box(), array.new_line(), array.new_line(), array.new_bool(), array.new_bool())
+var lo_kz = kz.new("London",  array.new_box(), array.new_line(), array.new_line(), array.new_bool(), array.new_bool())
+var na_kz = kz.new("New York",array.new_box(), array.new_line(), array.new_line(), array.new_bool(), array.new_bool())
 
-// Checklist rows
+// Variabel untuk Checklist
 var string[] liqSweepRunRows = array.from("1. Hit Liquidity", "2. Valid Pullback", "3. Break of Structure", "4. FIB 0.57 (Entry Zone)", "5. Risk to Reward 1:3 (Min)")
-var string[] liqKillzoneRows = array.from("1. Liquidity Sweep", "2. Valid Break CISD", "3. Konfirmasi Fair Value Gap", "4. Entry di P/D Zone (FIB 0.5)", "5. Target Likuiditas (RR 1:2.5)")
+var string[] liqKillzoneRows = array.from("1. Liquidity Sweep", "2. Change in State of Delivery", "3. Konfirmasi Fair Value Gap", "4. Entry di P/D Zone (FIB 0.5)", "5. Target Likuiditas (RR 1:2.5)")
 var bool[]   checkStates = array.from(check1, check2, check3, check4, check5)
-
-// ====== reset header/rows setiap bar ======
-string headerText = ""
-int    numRows    = 0
-string[] activeRows = array.new_string()
-
+var string   headerText = ""
+var int      numRows = 0
+var string[] activeRows = array.new_string()
 var table    checklistTable = na
 
-int n = bar_index
+// Variabel untuk Pivot & BOS
+var float last_ph_price  = na
+var float last_pl_price  = na
+var float bos_high_price = na
+var int   bos_high_index = na
+var bool  bos_high_active = false
+var float bos_low_price  = na
+var int   bos_low_index  = na
+var bool  bos_low_active = false
 
+// --- Fungsi-Fungsi ---
+// Fungsi untuk menggambar rentang sesi (Pagi/Malam)
 get_range(bool session_active, string session_name, color session_css)=>
     var int   t = 0
     var float max = high
@@ -145,17 +165,18 @@ get_range(bool session_active, string session_name, color session_css)=>
         t := time
         max := high
         min := low
-        bx := box.new(n, max, n, min, bgcolor = color.new(session_css, bg_transp), border_color = show_outline ? session_css : na, border_style = line.style_dotted)
+        bx := box.new(bar_index, max, bar_index, min, bgcolor = color.new(session_css, bg_transp), border_color = show_outline ? session_css : na, border_style = line.style_dotted)
         if show_txt
             lbl := label.new(t, max, session_name, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.large)
     if session_active
         max := math.max(high, max)
         min := math.min(low, min)
         box.set_top(bx, max)
-        box.set_rightbottom(bx, n, min)
+        box.set_rightbottom(bx, bar_index, min)
         if show_txt
             label.set_xy(lbl, int(math.avg(t, time)), max)
 
+// Fungsi-fungsi untuk manajemen Killzone
 _del_kz(kz k) =>
     if k._box.size() > MAX_DAYS_KZ
         k._box.pop().delete()
@@ -213,84 +234,77 @@ _manage_kz(kz kobj, bool use, bool t, color c, string box_txt) =>
         _adjust_in_kz(kobj, t)
     _adjust_out_kz(kobj, t)
 
+// --- Kalkulasi & Logika Utama ---
 string tf = timeframe.period
+// Waktu Sesi
 bool  in_sesa_time = not na(time(tf, sesa_ses, SESSION_TZ))
 bool  in_sesb_time = not na(time(tf, sesb_ses, SESSION_TZ))
-
-float fast_ema = request.security(syminfo.tickerid, ema_tf, ta.ema(close, ema_fast_len))
-float slow_ema = request.security(syminfo.tickerid, ema_tf, ta.ema(close, ema_slow_len))
-bool  is_bullish_trend = fast_ema > slow_ema
-
-float ema1_out_calc = ta.ema(ema1_src, ema1_len)
-float ema2_out_calc = ta.ema(ema2_src, ema2_len)
-
 bool  sesa_active = in_sesa_time
 bool  sesb_active = in_sesb_time
 bool  is_session_active = sesa_active or sesb_active
 
+// Kalkulasi EMA
+float fast_ema = request.security(syminfo.tickerid, ema_tf, ta.ema(close, ema_fast_len))
+float slow_ema = request.security(syminfo.tickerid, ema_tf, ta.ema(close, ema_slow_len))
+bool  is_bullish_trend = fast_ema > slow_ema
+float ema1_out_calc = ta.ema(close, ema_fast_len)
+float ema2_out_calc = ta.ema(close, ema_slow_len)
+
+// Waktu Sesi Liquidity & Killzone
 bool t_calc  = not na(time(tf, sweep_calc_session,  SESSION_TZ))
 bool t_trade = not na(time(tf, sweep_trade_session, SESSION_TZ))
-
-// === KZ ===
 bool t_as_kz = not na(time(tf, kz_asia_session,   KZ_TIMEZONE))
 bool t_lo_kz = not na(time(tf, kz_london_session, KZ_TIMEZONE))
 bool t_na_kz = not na(time(tf, kz_ny_session,     KZ_TIMEZONE))
 
+// Kondisi penggunaan Killzone
 bool use_asia_kz   = kz_selection == "Asia"   or kz_selection == "All"
 bool use_london_kz = kz_selection == "London" or kz_selection == "All"
 bool use_ny_kz     = kz_selection == "New York" or kz_selection == "All"
 
-bool lsr_allowed_now = show_lsr_base and (not is_ultimate_mode or (t_calc or t_trade))
-bool kz_asia_allowed_now = show_kz_base and use_asia_kz and (
-     not is_ultimate_mode or not (ultimate_hide_asia_kz and lsr_allowed_now))
+// Kondisi perizinan tampilan berdasarkan mode
+bool lsr_allowed_now     = show_lsr_base and (not is_ultimate_mode or (t_calc or t_trade))
+bool kz_asia_allowed_now = show_kz_base and use_asia_kz and (not is_ultimate_mode or not (ultimate_hide_asia_kz and (t_calc or t_trade)))
 
+// Update state checklist
 array.set(checkStates, 0, check1)
 array.set(checkStates, 1, check2)
 array.set(checkStates, 2, check3)
 array.set(checkStates, 3, check4)
 array.set(checkStates, 4, check5)
 
+// Logika dinamis untuk teks checklist
 bool is_pagi_local  = not na(time(tf, "0600-1759", SESSION_TZ))
-
-// SWITCH MODE
 switch strategy_mode
     "EMA Cross" =>
         string sessionTargetText = is_pagi_local ? "5. RR 1:2 (PAGI)" : "5. RR 1:3 (MALAM)"
-        headerText := "Checklist: EMA Cross\n Timeframe: 1 Menit"
+        headerText := "Checklist: EMA Cross"
         activeRows := array.from("1. EMA Cross", "2. Valid Pullback", "3. Break of Structure", "4. Entry di FIB 0.57", sessionTargetText)
         numRows := array.size(activeRows)
     "Liquidity Run" =>
-        headerText := "Checklist: Liquidity Run\n Timeframe: 1 Menit"
+        headerText := "Checklist: Liquidity Run"
         activeRows := liqSweepRunRows
         numRows := array.size(liqSweepRunRows)
     "Liquidity Sweep" =>
-        headerText := "Checklist: Liquidity Sweep (Killzone)\n Timeframe: 1 Menit atau 5 Menit"
+        headerText := "Checklist: Liquidity Sweep"
         activeRows := liqKillzoneRows
         numRows := array.size(liqKillzoneRows)
     "Ultimate Setup" =>
         headerText := "Checklist: Ultimate Setup"
-        activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Entry di FIB 0.57", "5. Target Sesi")
+        activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Reaksi FIB 0.57", "5. Target Sesi")
         numRows := array.size(activeRows)
     "Hybrid Setup" =>
         headerText := "Checklist: Hybrid Setup"
-        activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Entry di FIB 0.57", "5. Target Sesi")
+        activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Reaksi FIB 0.57", "5. Target Sesi")
         numRows := array.size(activeRows)
 
-// MS / BOS
+// Kalkulasi Pivot
 float ph_pivots = ta.pivothigh(pivot_left_bars, pivot_right_bars)
-float pl_pivots = ta.pivotlow(pivot_left_bars,  pivot_right_bars)
+float pl_pivots = ta.pivotlow(pivot_left_bars, pivot_right_bars)
 float ph_bos    = ta.pivothigh(bos_left_bars,  bos_right_bars)
-float pl_bos    = ta.pivotlow(bos_left_bars,   bos_right_bars)
+float pl_bos    = ta.pivotlow(bos_left_bars,  bos_right_bars)
 
-var float last_ph_price  = na
-var float last_pl_price  = na
-var float bos_high_price = na
-var int   bos_high_index = na
-var bool  bos_high_active = false
-var float bos_low_price  = na
-var int   bos_low_index  = na
-var bool  bos_low_active = false
-
+// Reset state pivot saat sesi baru dimulai
 if is_session_active and not is_session_active[1] and show_ema_base
     last_ph_price  := na
     last_pl_price  := na
@@ -299,13 +313,18 @@ if is_session_active and not is_session_active[1] and show_ema_base
     bos_high_active := false
     bos_low_active  := false
 
+// --- Plotting & Drawing ---
+// Plot EMA
 color plot_color1 = is_authorized and is_session_active and ema1_show ? ema1_color : na
 color plot_color2 = is_authorized and is_session_active and ema2_show ? ema2_color : na
-plot(ema1_show ? ema1_out_calc : na, title = "EMA 1", color = plot_color1, offset = ema1_offset, linewidth = 1)
-plot(ema2_show ? ema2_out_calc : na, title = "EMA 2", color = plot_color2, offset = ema2_offset, linewidth = 1)
+plot(ema1_show ? ema1_out_calc : na, title = "EMA 1", color = plot_color1, offset = 0, linewidth = 1)
+plot(ema2_show ? ema2_out_calc : na, title = "EMA 2", color = plot_color2, offset = 0, linewidth = 1)
 
+// Logika utama untuk menggambar di chart
 if is_authorized
+    // Logika khusus untuk mode yang menggunakan EMA base
     if show_ema_base
+        // [FIX] Menggambar sesi Pagi/Malam hanya untuk mode berbasis EMA
         get_range(sesa_active, sesa_txt, sesa_css)
         get_range(sesb_active, sesb_txt, sesb_css)
 
@@ -319,7 +338,6 @@ if is_authorized
                 else
                     label.new(bar_index[pivot_right_bars], ph_pivots, "H", yloc = yloc.abovebar, color = color.new(color.gray, 100), textcolor = color.gray, style = label.style_none, size = size.small, tooltip = "High")
                 last_ph_price := ph_pivots
-
             if not na(pl_pivots)
                 if not na(last_pl_price)
                     if pl_pivots < last_pl_price
@@ -329,7 +347,6 @@ if is_authorized
                 else
                     label.new(bar_index[pivot_right_bars], pl_pivots, "L", yloc = yloc.belowbar, color = color.new(color.gray, 100), textcolor = color.gray, style = label.style_none, size = size.small, tooltip = "Low")
                 last_pl_price := pl_pivots
-
             if not na(ph_bos)
                 bos_high_price  := ph_bos
                 bos_high_index  := bar_index[bos_right_bars]
@@ -338,7 +355,6 @@ if is_authorized
                 bos_low_price  := pl_bos
                 bos_low_index  := bar_index[bos_right_bars]
                 bos_low_active := true
-
             if show_bos
                 bool is_bullish_candle = close > open
                 bool bullish_break_condition = is_bullish_candle and (close - bos_high_price >= 0.5 * (close - open))
@@ -346,7 +362,6 @@ if is_authorized
                     line.new(bos_high_index, bos_high_price, bar_index, bos_high_price, color = color.black, style = line.style_dotted, width = 1)
                     label.new(int(math.floor(bos_high_index + (bar_index - bos_high_index) / 2)), bos_high_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
                     bos_high_active := false
-
                 bool is_bearish_candle = open > close
                 bool bearish_break_condition = is_bearish_candle and (bos_low_price - close >= 0.5 * (open - close))
                 if bos_low_active and close < bos_low_price and not is_bullish_trend and bearish_break_condition
@@ -354,6 +369,7 @@ if is_authorized
                     label.new(int(math.floor(bos_low_index + (bar_index - bos_low_index) / 2)), bos_low_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
                     bos_low_active := false
 
+    // Logika untuk Liquidity Run
     if lsr_allowed_now
         if t_calc and not t_calc[1]
             ls_calc_box := box.new(bar_index, high, bar_index, low, border_color = liquidity_pivot_color, border_style = line.style_dotted, bgcolor = color.new(liquidity_pivot_color, 90))
@@ -365,49 +381,45 @@ if is_authorized
             ls_low_price  := math.min(ls_low_price, low)
             box.set_top(ls_calc_box, ls_high_price)
             box.set_bottom(ls_calc_box, ls_low_price)
-
         if t_trade and not t_trade[1]
             if not na(ls_high_price)
                 ls_high_line  := line.new(bar_index, ls_high_price, bar_index, ls_high_price, color = liquidity_pivot_color, width = 1)
                 ls_low_line   := line.new(bar_index, ls_low_price,  bar_index, ls_low_price,  color = liquidity_pivot_color, width = 1)
                 ls_high_label := label.new(bar_index, ls_high_price, "High", xloc = xloc.bar_index, style = label.style_label_left, color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
-                ls_low_label  := label.new(bar_index, ls_low_price,  "Low",  xloc = xloc.bar_index, style = label.style_label_left,  color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
+                ls_low_label  := label.new(bar_index, ls_low_price,  "Low",  xloc = xloc.bar_index, style = label.style_label_left, color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
         else if t_trade
             line.set_x2(ls_high_line, bar_index)
             line.set_x2(ls_low_line,  bar_index)
             label.set_x(ls_high_label, bar_index)
             label.set_x(ls_low_label,  bar_index)
-    else if is_ultimate_mode
+    else if is_ultimate_mode or is_hybrid_mode // Hapus visual jika mode berganti
         if not na(ls_calc_box)
             box.delete(ls_calc_box)
-            ls_calc_box := na
         if not na(ls_high_line)
             line.delete(ls_high_line)
-            ls_high_line := na
         if not na(ls_low_line)
             line.delete(ls_low_line)
-            ls_low_line := na
         if not na(ls_high_label)
             label.delete(ls_high_label)
-            ls_high_label := na
         if not na(ls_low_label)
             label.delete(ls_low_label)
-            ls_low_label := na
 
+    // Logika untuk Killzone
     if show_kz_base and timeframe.isintraday
-        _manage_kz(as_kz, kz_asia_allowed_now,           t_as_kz, AS_COLOR, "Asia")
+        _manage_kz(as_kz, kz_asia_allowed_now,       t_as_kz, AS_COLOR, "Asia")
         _manage_kz(lo_kz, use_london_kz and show_kz_base, t_lo_kz, LO_COLOR, "London")
         _manage_kz(na_kz, use_ny_kz and show_kz_base,     t_na_kz, NA_COLOR, "New York")
 
-    if show_alerts and show_ema_base
+    // Logika Notifikasi
+    if show_alerts and show_ema_base // [FIX] Notifikasi sesi terikat dengan mode EMA
         if sesa_active and not sesa_active[1]
             alert("Sesi PAGI (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
         if sesb_active and not sesb_active[1]
             alert("Sesi MALAM (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
 
+// --- Panel & Dasbor ---
 var table_position = dash_loc == "Bottom Left" ? position.bottom_left : dash_loc == "Top Right" ? position.top_right : dash_loc == "Top Left" ? position.top_left : position.bottom_right
 var table_size = text_size == "Tiny" ? size.tiny : text_size == "Small" ? size.small : size.normal
-
 color dash_bg_color = color.new(#434651, 20)
 color dash_border_color = #787b86
 color dash_text_color = color.white
@@ -417,51 +429,59 @@ color malam_text_css = #5882ff
 
 var table tb = table.new(table_position, 3, 4, bgcolor = dash_bg_color, border_color = dash_border_color, border_width = 1, frame_color = dash_border_color, frame_width = 1)
 
+// Panel jika akses ditolak
 bgcolor(not is_authorized ? color.new(color.black, 85) : na, title = "Lockout Overlay")
 var table access_denied_panel_main = table.new(position.middle_center, 1, 1, border_width = 1, border_color = color.new(color.silver, 80))
 var table access_denied_panel_tl   = table.new(position.top_left, 1, 1)
 var table access_denied_panel_tr   = table.new(position.top_right, 1, 1)
 var table access_denied_panel_bl   = table.new(position.bottom_left, 1, 1)
 
+// Fungsi untuk menggambar dasbor status
 drawDashboardTable() =>
-    if show_ema_base
-        table.clear(tb, 0, 0, 2, 3)
-        table.cell(tb, 0, 0, "UT Session Status", text_color = dash_text_color, text_size = table_size, text_halign = text.align_center)
-        table.merge_cells(tb, 0, 0, 2, 0)
-        table.cell(tb, 0, 1, "Sesi",   text_color = dash_header_text_color, text_size = table_size)
-        table.cell(tb, 1, 1, "Status", text_color = dash_header_text_color, text_size = table_size)
-        table.cell(tb, 2, 1, "Trend",  text_color = dash_header_text_color, text_size = table_size)
+    table.clear(tb, 0, 0, 2, 3)
+    table.cell(tb, 0, 0, "UT Session Status", text_color = dash_text_color, text_size = table_size, text_halign = text.align_center)
+    table.merge_cells(tb, 0, 0, 2, 0)
+    table.cell(tb, 0, 1, "Sesi",   text_color = dash_header_text_color, text_size = table_size)
+    table.cell(tb, 1, 1, "Status", text_color = dash_header_text_color, text_size = table_size)
+    table.cell(tb, 2, 1, "Trend",  text_color = dash_header_text_color, text_size = table_size)
 
-        string status_a = sesa_active ? "Aktif" : "Mati"
-        color  color_a  = sesa_active ? #089981 : color.gray
-        string trend_a  = sesa_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
-        color  trend_color_a = sesa_active ? (is_bullish_trend ? color.green : color.red) : color.gray
-        table.cell(tb, 0, 2, sesa_txt, text_color = pagi_text_css,  text_size = table_size)
-        table.cell(tb, 1, 2, status_a, bgcolor = color.new(color_a, 70), text_color = dash_text_color, text_size = table_size)
-        table.cell(tb, 2, 2, trend_a,  bgcolor = color.new(trend_color_a, 70), text_color = dash_text_color, text_size = table_size)
+    // Sesi Pagi
+    string status_a = sesa_active ? "Aktif" : "Mati"
+    color  color_a  = sesa_active ? #089981 : color.gray
+    string trend_a  = "-"
+    color  trend_color_a = color.gray
+    if show_ema_base // Tampilkan trend hanya jika relevan
+        trend_a  := sesa_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
+        trend_color_a := sesa_active ? (is_bullish_trend ? color.green : color.red) : color.gray
+    table.cell(tb, 0, 2, sesa_txt, text_color = pagi_text_css,  text_size = table_size)
+    table.cell(tb, 1, 2, status_a, bgcolor = color.new(color_a, 70), text_color = dash_text_color, text_size = table_size)
+    table.cell(tb, 2, 2, trend_a,  bgcolor = color.new(trend_color_a, 70), text_color = dash_text_color, text_size = table_size)
 
-        string status_b = sesb_active ? "Aktif" : "Mati"
-        color  color_b  = sesb_active ? #089981 : color.gray
-        string trend_b  = sesb_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
-        color  trend_color_b = sesb_active ? (is_bullish_trend ? color.green : color.red) : color.gray
-        table.cell(tb, 0, 3, sesb_txt, text_color = malam_text_css, text_size = table_size)
-        table.cell(tb, 1, 3, status_b, bgcolor = color.new(color_b, 70), text_color = dash_text_color, text_size = table_size)
-        table.cell(tb, 2, 3, trend_b,  bgcolor = color.new(trend_color_b, 70), text_color = dash_text_color, text_size = table_size)
-    else
-        table.clear(tb, 0, 0, 2, 3)
+    // Sesi Malam
+    string status_b = sesb_active ? "Aktif" : "Mati"
+    color  color_b  = sesb_active ? #089981 : color.gray
+    string trend_b  = "-"
+    color  trend_color_b = color.gray
+    if show_ema_base // Tampilkan trend hanya jika relevan
+        trend_b  := sesb_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
+        trend_color_b := sesb_active ? (is_bullish_trend ? color.green : color.red) : color.gray
+    table.cell(tb, 0, 3, sesb_txt, text_color = malam_text_css, text_size = table_size)
+    table.cell(tb, 1, 3, status_b, bgcolor = color.new(color_b, 70), text_color = dash_text_color, text_size = table_size)
+    table.cell(tb, 2, 3, trend_b,  bgcolor = color.new(trend_color_b, 70), text_color = dash_text_color, text_size = table_size)
 
+// Fungsi untuk menggambar tabel checklist
 drawChecklistTable() =>
     if not na(checklistTable)
         table.clear(checklistTable, 0, 0, 0, 9)
         table.cell(checklistTable, column = 0, row = 0, text = " " + headerText + " ", text_size = size.small, text_color = color.black, bgcolor = #b3b3b3, text_halign = text.align_left)
-        int rowsToDraw = math.min(numRows, array.size(activeRows))
-        for i = 0 to rowsToDraw - 1
+        for i = 0 to numRows - 1
             bool   isChecked    = array.get(checkStates, i)
             string rowText      = array.get(activeRows, i)
             string displayText  = (isChecked ? "✔ " : "✘ ") + rowText
             color  displayColor = isChecked ? #008000 : #8B0000
             table.cell(checklistTable, column = 0, row = i + 1, text = displayText, text_size = size.small, text_color = displayColor, bgcolor = na, text_halign = text.align_left)
 
+// Fungsi untuk menggambar panel otentikasi
 drawAuthPanel() =>
     if not is_authorized
         table.cell(access_denied_panel_main, 0, 0, "[ INVALID PASSWORD ]\n--Protected by Azchemist System--", text_color = color.silver, text_size = size.normal, text_halign = "center", text_valign = "center", bgcolor = color.new(#212529, 20))
@@ -474,14 +494,18 @@ drawAuthPanel() =>
         table.clear(access_denied_panel_tr, 0, 0)
         table.clear(access_denied_panel_bl, 0, 0)
 
+// --- Eksekusi pada Bar Terakhir ---
 if barstate.islast
     drawAuthPanel()
     if is_authorized
         drawDashboardTable()
         bool checklist_enabled = not (is_ultimate_mode or is_hybrid_mode)
         if checklist_enabled
-            checklistTable := na
-            checklistTable := table.new(position.bottom_right, columns = 1, rows = 10, border_width = 1, border_color = color.black, frame_width = 1, frame_color = color.black)
+            if na(checklistTable) // Buat tabel hanya sekali
+                checklistTable := table.new(position.bottom_right, columns = 1, rows = 10, border_width = 1, border_color = color.black, frame_width = 1, frame_color = color.black)
             drawChecklistTable()
+        else if not na(checklistTable) // Hapus tabel jika mode diubah
+            table.delete(checklistTable)
+            checklistTable := na
     else
         table.clear(tb, 0, 0, 2, 3)
