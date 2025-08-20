@@ -1,4 +1,4 @@
-//Azchemist Proprietary License — Version 1.4 Fixed (August 20, 2025)
+//Azchemist Proprietary License — Version 2.0 (August 20, 2025)
 //Copyright (c) 2025 Azchemist. All rights reserved.
 
 //DILARANG KERAS:
@@ -30,6 +30,9 @@ strategy_mode = input.string(
      options = ["EMA Cross", "Liquidity Run", "Liquidity Sweep", "Ultimate Setup", "Hybrid Setup"],
      group = toggle_group,
      tooltip = "Pilih strategi yang akan ditampilkan")
+
+// [ADD] Menambahkan toggle untuk Mode Backtest
+backtest_mode = input.bool(true, "Mode Backtest", group = toggle_group, tooltip="Jika aktif, menampilkan semua visualisasi historis. Jika nonaktif, hanya menampilkan sesi terbaru")
 
 kz_group = "Pengaturan Liquidity Sweep (Killzone)"
 kz_selection = input.string("All", "Killzone", options = ["Asia", "London", "New York", "All", "None"], group = kz_group, tooltip = "Pilih killzone yang ditampilkan")
@@ -63,7 +66,7 @@ string SESSION_TZ  = "Asia/Jakarta"
 
 // Sesi Killzone & Liquidity
 string KZ_TIMEZONE = "GMT-4"
-int    MAX_DAYS_KZ = 60
+int    MAX_DAYS_KZ = 60 // [REVERT] Mengembalikan batas hari untuk backtest
 string kz_asia_session   = "2000-0000"
 string kz_london_session = "0200-0500"
 string kz_ny_session     = "0830-1130"
@@ -76,7 +79,7 @@ string sweep_trade_session = "0900-1300"
 color  liquidity_pivot_color = color.new(color.red, 0)
 
 // Pengaturan EMA
-string ema_tf = "1"
+string ema_tf = "5"
 int    ema_fast_len = 9
 int    ema_slow_len = 21
 color  ema1_color = color.new(#414852, 0)
@@ -155,13 +158,20 @@ var bool  bos_low_active = false
 
 // --- Fungsi-Fungsi ---
 // Fungsi untuk menggambar rentang sesi (Pagi/Malam)
-get_range(bool session_active, string session_name, color session_css)=>
+get_range(bool session_active, string session_name, color session_css, bool is_backtest)=>
+    var box   bx = na
+    var label lbl = na
     var int   t = 0
     var float max = high
     var float min = low
-    var box   bx = na
-    var label lbl = na
+    
     if session_active and not session_active[1]
+        if not is_backtest
+            if not na(bx)
+                bx.delete()
+            if not na(lbl)
+                lbl.delete()
+
         t := time
         max := high
         min := low
@@ -176,7 +186,7 @@ get_range(bool session_active, string session_name, color session_css)=>
         if show_txt
             label.set_xy(lbl, int(math.avg(t, time)), max)
 
-// Fungsi-fungsi untuk manajemen Killzone
+// [REVERT] Mengembalikan fungsi _del_kz untuk mode backtest
 _del_kz(kz k) =>
     if k._box.size() > MAX_DAYS_KZ
         k._box.pop().delete()
@@ -220,9 +230,21 @@ _adjust_out_kz(kz kobj, bool t) =>
         alert("Broke " + kobj._title + " Low (Body Close)", alert.freq_once_per_bar_close)
         kobj._lo_valid.set(0, false)
 
-_manage_kz(kz kobj, bool use, bool t, color c, string box_txt) =>
+// [MODIFY] Fungsi _manage_kz diubah untuk menangani mode backtest
+_manage_kz(kz kobj, bool use, bool t, color c, string box_txt, bool is_backtest) =>
     if use
         if t and not t[1]
+            if not is_backtest
+                // Hapus semua elemen visual sebelumnya jika mode backtest nonaktif
+                while kobj._box.size() > 0
+                    kobj._box.pop().delete()
+                while kobj._hi_line.size() > 0
+                    kobj._hi_line.pop().delete()
+                    kobj._lo_line.pop().delete()
+                kobj._hi_valid.clear()
+                kobj._lo_valid.clear()
+
+            // Buat elemen visual yang baru
             color _c = color.new(c, BOX_TRANSPARENCY_KZ)
             color _t = color.new(c, 75)
             kobj._box.unshift(box.new(time, high, time, low, xloc = xloc.bar_time, border_color = _c, bgcolor = _c, text = box_txt, text_color = _t, text_size = size.normal))
@@ -230,7 +252,9 @@ _manage_kz(kz kobj, bool use, bool t, color c, string box_txt) =>
             kobj._lo_line.unshift(line.new(time, low, time, low, xloc = xloc.bar_time, style = line.style_solid, color = c, width = 1))
             array.unshift(kobj._hi_valid, true)
             array.unshift(kobj._lo_valid, true)
-            _del_kz(kobj)
+            
+            if is_backtest
+                _del_kz(kobj) // Batasi jumlah sesi hanya di mode backtest
         _adjust_in_kz(kobj, t)
     _adjust_out_kz(kobj, t)
 
@@ -324,9 +348,9 @@ plot(ema2_show ? ema2_out_calc : na, title = "EMA 2", color = plot_color2, offse
 if is_authorized
     // Logika khusus untuk mode yang menggunakan EMA base
     if show_ema_base
-        // [FIX] Menggambar sesi Pagi/Malam hanya untuk mode berbasis EMA
-        get_range(sesa_active, sesa_txt, sesa_css)
-        get_range(sesb_active, sesb_txt, sesb_css)
+        // Menggambar sesi Pagi/Malam hanya untuk mode berbasis EMA
+        get_range(sesa_active, sesa_txt, sesa_css, backtest_mode)
+        get_range(sesb_active, sesb_txt, sesb_css, backtest_mode)
 
         if is_session_active and show_pivots_ms
             if not na(ph_pivots)
@@ -372,6 +396,18 @@ if is_authorized
     // Logika untuk Liquidity Run
     if lsr_allowed_now
         if t_calc and not t_calc[1]
+            if not backtest_mode
+                if not na(ls_calc_box)
+                    box.delete(ls_calc_box)
+                if not na(ls_high_line)
+                    line.delete(ls_high_line)
+                if not na(ls_low_line)
+                    line.delete(ls_low_line)
+                if not na(ls_high_label)
+                    label.delete(ls_high_label)
+                if not na(ls_low_label)
+                    label.delete(ls_low_label)
+            
             ls_calc_box := box.new(bar_index, high, bar_index, low, border_color = liquidity_pivot_color, border_style = line.style_dotted, bgcolor = color.new(liquidity_pivot_color, 90))
             ls_high_price := high
             ls_low_price  := low
@@ -406,12 +442,12 @@ if is_authorized
 
     // Logika untuk Killzone
     if show_kz_base and timeframe.isintraday
-        _manage_kz(as_kz, kz_asia_allowed_now,       t_as_kz, AS_COLOR, "Asia")
-        _manage_kz(lo_kz, use_london_kz and show_kz_base, t_lo_kz, LO_COLOR, "London")
-        _manage_kz(na_kz, use_ny_kz and show_kz_base,     t_na_kz, NA_COLOR, "New York")
+        _manage_kz(as_kz, kz_asia_allowed_now,       t_as_kz, AS_COLOR, "Asia", backtest_mode)
+        _manage_kz(lo_kz, use_london_kz and show_kz_base, t_lo_kz, LO_COLOR, "London", backtest_mode)
+        _manage_kz(na_kz, use_ny_kz and show_kz_base,     t_na_kz, NA_COLOR, "New York", backtest_mode)
 
     // Logika Notifikasi
-    if show_alerts and show_ema_base // [FIX] Notifikasi sesi terikat dengan mode EMA
+    if show_alerts and show_ema_base // Notifikasi sesi terikat dengan mode EMA
         if sesa_active and not sesa_active[1]
             alert("Sesi PAGI (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
         if sesb_active and not sesb_active[1]
