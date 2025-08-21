@@ -408,7 +408,7 @@ if is_authorized
             sesa_is_drawing_adx := false
         if sesa_active and not na(sesa_main_box)
             if is_adx_weak and not sesa_is_drawing_adx
-                sesa_adx_boxes.push(box.new(bar_index, sesa_main_box.get_top(), bar_index, sesa_main_box.get_bottom(), bgcolor=color.new(color.gray, 90), border_color=na))
+                sesa_adx_boxes.push(box.new(bar_index, sesa_main_box.get_top(), bar_index, sesa_main_box.get_bottom(), bgcolor=color.new(color.red, 90), border_color=na))
                 sesa_is_drawing_adx := true
             if is_adx_weak and sesa_is_drawing_adx and array.size(sesa_adx_boxes) > 0
                 box last_box = array.get(sesa_adx_boxes, array.size(sesa_adx_boxes) - 1)
@@ -427,7 +427,7 @@ if is_authorized
             sesb_is_drawing_adx := false
         if sesb_active and not na(sesb_main_box)
             if is_adx_weak and not sesb_is_drawing_adx
-                sesb_adx_boxes.push(box.new(bar_index, sesb_main_box.get_top(), bar_index, sesb_main_box.get_bottom(), bgcolor=color.new(color.gray, 90), border_color=na))
+                sesb_adx_boxes.push(box.new(bar_index, sesb_main_box.get_top(), bar_index, sesb_main_box.get_bottom(), bgcolor=color.new(color.red, 90), border_color=na))
                 sesb_is_drawing_adx := true
             if is_adx_weak and sesb_is_drawing_adx and array.size(sesb_adx_boxes) > 0
                 box last_box = array.get(sesb_adx_boxes, array.size(sesb_adx_boxes) - 1)
