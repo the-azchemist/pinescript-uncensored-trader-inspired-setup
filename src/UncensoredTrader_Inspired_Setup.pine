@@ -1,4 +1,4 @@
-//Azchemist Proprietary License — Version 3.0 (August 21, 2025)
+//Azchemist Proprietary License — Version 3.1 (August 26, 2025)
 //Copyright (c) 2025 Azchemist. All rights reserved.
 
 //DILARANG KERAS:
@@ -117,6 +117,10 @@ bool ema2_show     = show_ema_base
 bool show_pivots_ms = show_ema_base and show_ema_ms_pivots
 bool show_bos       = show_pivots_ms
 
+// --- Tipe Data Custom ---
+type adx_session_boxes
+    array<box> box_array
+
 // --- Variabel State (var) ---
 var box   ls_calc_box   = na
 var line  ls_high_line  = na
@@ -161,10 +165,12 @@ var bool  bos_low_active = false
 // Variabel untuk Sesi Pagi/Malam dan ADX Overlay
 var box sesa_main_box = na
 var box sesb_main_box = na
-var box[] sesa_adx_boxes = array.new_box()
-var box[] sesb_adx_boxes = array.new_box()
 var bool sesa_is_drawing_adx = false
 var bool sesb_is_drawing_adx = false
+var map<int, adx_session_boxes> sesa_adx_map = map.new<int, adx_session_boxes>()
+var map<int, adx_session_boxes> sesb_adx_map = map.new<int, adx_session_boxes>()
+var int current_sesa_id = na
+var int current_sesb_id = na
 
 // --- Fungsi-Fungsi ---
 // Fungsi untuk kalkulasi ADX
@@ -357,12 +363,26 @@ if is_authorized
                     sesa_main_box.delete()
                 if not na(sesa_lbl)
                     sesa_lbl.delete()
+                adx_session_boxes[] boxes_to_del_wrappers = sesa_adx_map.values()
+                if array.size(boxes_to_del_wrappers) > 0
+                    for i = 0 to array.size(boxes_to_del_wrappers) - 1
+                        wrapper = array.get(boxes_to_del_wrappers, i)
+                        array_inner = wrapper.box_array
+                        if array.size(array_inner) > 0
+                            for j = 0 to array.size(array_inner) - 1
+                                box.delete(array.get(array_inner, j))
+                sesa_adx_map.clear()
+
+            current_sesa_id := time
+            sesa_adx_map.put(current_sesa_id, adx_session_boxes.new(array.new<box>()))
+            sesa_is_drawing_adx := false
             sesa_t := time
             sesa_max := high
             sesa_min := low
             sesa_main_box := box.new(bar_index, sesa_max, bar_index, sesa_min, bgcolor = color.new(sesa_css, bg_transp), border_color = show_outline ? sesa_css : na, border_style = line.style_dotted)
             if show_txt
                 sesa_lbl := label.new(sesa_t, sesa_max, sesa_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.large)
+
         if sesa_active
             sesa_max := math.max(high, sesa_max)
             sesa_min := math.min(low, sesa_min)
@@ -370,6 +390,26 @@ if is_authorized
             box.set_rightbottom(sesa_main_box, bar_index, sesa_min)
             if show_txt
                 label.set_xy(sesa_lbl, int(math.avg(sesa_t, time)), sesa_max)
+            
+            bool is_adx_weak_pagi = adxValue < 20
+            adx_session_boxes current_sesa_wrapper = sesa_adx_map.get(current_sesa_id)
+            array<box> current_sesa_boxes = current_sesa_wrapper.box_array
+
+            if is_adx_weak_pagi and not sesa_is_drawing_adx
+                new_box = box.new(bar_index, sesa_max, bar_index, sesa_min, bgcolor=color.new(color.red, 80), border_color=na)
+                array.push(current_sesa_boxes, new_box)
+                sesa_is_drawing_adx := true
+            if is_adx_weak_pagi and sesa_is_drawing_adx and array.size(current_sesa_boxes) > 0
+                last_box = array.get(current_sesa_boxes, array.size(current_sesa_boxes) - 1)
+                last_box.set_right(bar_index)
+            if not is_adx_weak_pagi
+                sesa_is_drawing_adx := false
+
+            if array.size(current_sesa_boxes) > 0
+                for i = 0 to array.size(current_sesa_boxes) - 1
+                    b = array.get(current_sesa_boxes, i)
+                    b.set_top(sesa_max)
+                    b.set_bottom(sesa_min)
 
         // --- Sesi Malam ---
         var label sesb_lbl = na
@@ -382,12 +422,26 @@ if is_authorized
                     sesb_main_box.delete()
                 if not na(sesb_lbl)
                     sesb_lbl.delete()
+                adx_session_boxes[] boxes_to_del_wrappers = sesb_adx_map.values()
+                if array.size(boxes_to_del_wrappers) > 0
+                    for i = 0 to array.size(boxes_to_del_wrappers) - 1
+                        wrapper = array.get(boxes_to_del_wrappers, i)
+                        array_inner = wrapper.box_array
+                        if array.size(array_inner) > 0
+                            for j = 0 to array.size(array_inner) - 1
+                                box.delete(array.get(array_inner, j))
+                sesb_adx_map.clear()
+            
+            current_sesb_id := time
+            sesb_adx_map.put(current_sesb_id, adx_session_boxes.new(array.new<box>()))
+            sesb_is_drawing_adx := false
             sesb_t := time
             sesb_max := high
             sesb_min := low
             sesb_main_box := box.new(bar_index, sesb_max, bar_index, sesb_min, bgcolor = color.new(sesb_css, bg_transp), border_color = show_outline ? sesb_css : na, border_style = line.style_dotted)
             if show_txt
                 sesb_lbl := label.new(sesb_t, sesb_max, sesb_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.large)
+        
         if sesb_active
             sesb_max := math.max(high, sesb_max)
             sesb_min := math.min(low, sesb_min)
@@ -396,46 +450,25 @@ if is_authorized
             if show_txt
                 label.set_xy(sesb_lbl, int(math.avg(sesb_t, time)), sesb_max)
 
-        // --- Logika Overlay ADX ---
-        bool is_adx_weak = adxValue < 20
-        
-        // Overlay Sesi Pagi
-        if sesa_active and not sesa_active[1]
-            if array.size(sesa_adx_boxes) > 0
-                for i = 0 to array.size(sesa_adx_boxes) - 1
-                    box.delete(array.get(sesa_adx_boxes, i))
-            sesa_adx_boxes.clear()
-            sesa_is_drawing_adx := false
-        if sesa_active and not na(sesa_main_box)
-            if is_adx_weak and not sesa_is_drawing_adx
-                sesa_adx_boxes.push(box.new(bar_index, sesa_main_box.get_top(), bar_index, sesa_main_box.get_bottom(), bgcolor=color.new(color.red, 90), border_color=na))
-                sesa_is_drawing_adx := true
-            if is_adx_weak and sesa_is_drawing_adx and array.size(sesa_adx_boxes) > 0
-                box last_box = array.get(sesa_adx_boxes, array.size(sesa_adx_boxes) - 1)
-                last_box.set_right(bar_index)
-                last_box.set_top(sesa_main_box.get_top())
-                last_box.set_bottom(sesa_main_box.get_bottom())
-            if not is_adx_weak
-                sesa_is_drawing_adx := false
+            bool is_adx_weak_malam = adxValue < 25
+            adx_session_boxes current_sesb_wrapper = sesb_adx_map.get(current_sesb_id)
+            array<box> current_sesb_boxes = current_sesb_wrapper.box_array
 
-        // Overlay Sesi Malam
-        if sesb_active and not sesb_active[1]
-            if array.size(sesb_adx_boxes) > 0
-                for i = 0 to array.size(sesb_adx_boxes) - 1
-                    box.delete(array.get(sesb_adx_boxes, i))
-            sesb_adx_boxes.clear()
-            sesb_is_drawing_adx := false
-        if sesb_active and not na(sesb_main_box)
-            if is_adx_weak and not sesb_is_drawing_adx
-                sesb_adx_boxes.push(box.new(bar_index, sesb_main_box.get_top(), bar_index, sesb_main_box.get_bottom(), bgcolor=color.new(color.red, 90), border_color=na))
+            if is_adx_weak_malam and not sesb_is_drawing_adx
+                new_box = box.new(bar_index, sesb_max, bar_index, sesb_min, bgcolor=color.new(color.red, 80), border_color=na)
+                array.push(current_sesb_boxes, new_box)
                 sesb_is_drawing_adx := true
-            if is_adx_weak and sesb_is_drawing_adx and array.size(sesb_adx_boxes) > 0
-                box last_box = array.get(sesb_adx_boxes, array.size(sesb_adx_boxes) - 1)
+            if is_adx_weak_malam and sesb_is_drawing_adx and array.size(current_sesb_boxes) > 0
+                last_box = array.get(current_sesb_boxes, array.size(current_sesb_boxes) - 1)
                 last_box.set_right(bar_index)
-                last_box.set_top(sesb_main_box.get_top())
-                last_box.set_bottom(sesb_main_box.get_bottom())
-            if not is_adx_weak
+            if not is_adx_weak_malam
                 sesb_is_drawing_adx := false
+
+            if array.size(current_sesb_boxes) > 0
+                for i = 0 to array.size(current_sesb_boxes) - 1
+                    b = array.get(current_sesb_boxes, i)
+                    b.set_top(sesb_max)
+                    b.set_bottom(sesb_min)
 
         // --- Logika Pivot & BOS ---
         if is_session_active and show_pivots_ms
