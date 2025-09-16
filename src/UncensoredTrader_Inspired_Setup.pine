@@ -107,19 +107,19 @@ bool show_txt = show_ema_base
 bool ema1_show = show_ema_base
 bool ema2_show = show_ema_base
 type adx_session_boxes
-    array<box> box_array
+	array<box> box_array
 type kz
-    string _title
-    box[] _box
-    line[] _hi_line
-    line[] _lo_line
+	string _title
+	box[] _box
+	line[] _hi_line
+	line[] _lo_line
 type fairValueGap
-    float top
-    float bottom
-    int bias
-    box fvgBox
-    bool mitigated
-    int startTime
+	float top
+	float bottom
+	int bias
+	box fvgBox
+	bool mitigated
+	int startTime
 var box ls_calc_box = na
 var line ls_high_line = na
 var line ls_low_line = na
@@ -165,6 +165,8 @@ var int current_sesa_id = na
 var int current_sesb_id = na
 var bool sesa_ema_crossed = false
 var bool sesb_ema_crossed = false
+var bool sesa_box_drawn = false // BUG FIX: Flag untuk melacak apakah box sesi pagi sudah digambar
+var bool sesb_box_drawn = false // BUG FIX: Flag untuk melacak apakah box sesi malam sudah digambar
 string tf = timeframe.period
 bool in_sesa_time = not na(time(tf, sesa_ses, SESSION_TZ))
 bool in_sesb_time = not na(time(tf, sesb_ses, SESSION_TZ))
@@ -177,103 +179,103 @@ float ema2_out_calc = ta.ema(close, ema_slow_len)
 bool is_bullish_trend = ema1_out_calc > ema2_out_calc
 bool ema_crossed = ta.cross(ema1_out_calc, ema2_out_calc)
 clearAllFvgs() =>
-    if array.size(fvgs) > 0
-        for i = 0 to array.size(fvgs) - 1
-            box.delete(array.get(fvgs, i).fvgBox)
-        array.clear(fvgs)
+	if array.size(fvgs) > 0
+		for i = 0 to array.size(fvgs) - 1
+			box.delete(array.get(fvgs, i).fvgBox)
+		array.clear(fvgs)
 detectFVG(bool allowBullish, bool allowBearish) =>
-    bool isBullishFvg = low > high[2]
-    bool isBearishFvg = high < low[2]
-    int barDuration = time - time[1]
-    int rightTime = time + barDuration * fvgExtensionLength
-    if isBullishFvg and allowBullish
-        float fvgTop = low
-        float fvgBottom = high[2]
-        box newBox = box.new(left=time[1], top=fvgTop, right=rightTime, bottom=fvgBottom, bgcolor=fairValueGapsBullColorInput, border_color=color.new(color.white, 100), xloc=xloc.bar_time)
-        fvgs.unshift(fairValueGap.new(fvgTop, fvgBottom, BULLISH, newBox, false, time))
-    if isBearishFvg and allowBearish
-        float fvgTop = low[2]
-        float fvgBottom = high
-        box newBox = box.new(left=time[1], top=fvgTop, right=rightTime, bottom=fvgBottom, bgcolor=fairValueGapsBearColorInput, border_color=color.new(color.white, 100), xloc=xloc.bar_time)
-        fvgs.unshift(fairValueGap.new(fvgTop, fvgBottom, BEARISH, newBox, false, time))
-    if array.size(fvgs) > 500
-        fairValueGap oldestFvg = array.pop(fvgs)
-        box.delete(oldestFvg.fvgBox)
+	bool isBullishFvg = low > high[2]
+	bool isBearishFvg = high < low[2]
+	int barDuration = time - time[1]
+	int rightTime = time + barDuration * fvgExtensionLength
+	if isBullishFvg and allowBullish
+		float fvgTop = low
+		float fvgBottom = high[2]
+		box newBox = box.new(left=time[1], top=fvgTop, right=rightTime, bottom=fvgBottom, bgcolor=fairValueGapsBullColorInput, border_color=color.new(color.white, 100), xloc=xloc.bar_time)
+		fvgs.unshift(fairValueGap.new(fvgTop, fvgBottom, BULLISH, newBox, false, time))
+	if isBearishFvg and allowBearish
+		float fvgTop = low[2]
+		float fvgBottom = high
+		box newBox = box.new(left=time[1], top=fvgTop, right=rightTime, bottom=fvgBottom, bgcolor=fairValueGapsBearColorInput, border_color=color.new(color.white, 100), xloc=xloc.bar_time)
+		fvgs.unshift(fairValueGap.new(fvgTop, fvgBottom, BEARISH, newBox, false, time))
+	if array.size(fvgs) > 500
+		fairValueGap oldestFvg = array.pop(fvgs)
+		box.delete(oldestFvg.fvgBox)
 manageAndExtendFVGs() =>
-    if array.size(fvgs) > 0
-        array<fairValueGap> keptFvgs = array.new<fairValueGap>()
-        for i = 0 to array.size(fvgs) - 1
-            fairValueGap fvg = array.get(fvgs, i)
-            bool shouldKeep = true
-            bool canCheckMitigation = time > fvg.startTime
-            if not fvg.mitigated and canCheckMitigation
-                if is_ema_ob_mode
-                    bool trendHasFlipped = (fvg.bias == BULLISH and not is_bullish_trend) or (fvg.bias == BEARISH and is_bullish_trend)
-                    if trendHasFlipped
-                        box.delete(fvg.fvgBox)
-                        shouldKeep := false
-                if shouldKeep
-                    bool isMitigated = false
-                    if fvg.bias == BULLISH and low <= fvg.top
-                        isMitigated := true
-                    if fvg.bias == BEARISH and high >= fvg.bottom
-                        isMitigated := true
-                    if isMitigated
-                        fvg.mitigated := true
-                        fvg.fvgBox.set_right(time)
-                    else
-                        if is_ema_ob_mode
-                            if sesc_active
-                                fvg.fvgBox.set_right(time + (time - time[1]) * fvgExtensionLength)
-                            else if sesc_active[1]
-                                fvg.fvgBox.set_right(time) 
-                        else
-                            fvg.fvgBox.set_right(time + (time - time[1]) * fvgExtensionLength)
-            if shouldKeep
-                array.push(keptFvgs, fvg)
-        if array.size(fvgs) != array.size(keptFvgs)
-            array.clear(fvgs)
-            if array.size(keptFvgs) > 0
-                for j = 0 to array.size(keptFvgs) - 1
-                    array.push(fvgs, array.get(keptFvgs, j))
+	if array.size(fvgs) > 0
+		array<fairValueGap> keptFvgs = array.new<fairValueGap>()
+		for i = 0 to array.size(fvgs) - 1
+			fairValueGap fvg = array.get(fvgs, i)
+			bool shouldKeep = true
+			bool canCheckMitigation = time > fvg.startTime
+			if not fvg.mitigated and canCheckMitigation
+				if is_ema_ob_mode
+					bool trendHasFlipped = (fvg.bias == BULLISH and not is_bullish_trend) or (fvg.bias == BEARISH and is_bullish_trend)
+					if trendHasFlipped
+						box.delete(fvg.fvgBox)
+						shouldKeep := false
+				if shouldKeep
+					bool isMitigated = false
+					if fvg.bias == BULLISH and low <= fvg.top
+						isMitigated := true
+					if fvg.bias == BEARISH and high >= fvg.bottom
+						isMitigated := true
+					if isMitigated
+						fvg.mitigated := true
+						fvg.fvgBox.set_right(time)
+					else
+						if is_ema_ob_mode
+							if sesc_active
+								fvg.fvgBox.set_right(time + (time - time[1]) * fvgExtensionLength)
+							else if sesc_active[1]
+								fvg.fvgBox.set_right(time)
+						else
+							fvg.fvgBox.set_right(time + (time - time[1]) * fvgExtensionLength)
+			if shouldKeep
+				array.push(keptFvgs, fvg)
+		if array.size(fvgs) != array.size(keptFvgs)
+			array.clear(fvgs)
+			if array.size(keptFvgs) > 0
+				for j = 0 to array.size(keptFvgs) - 1
+					array.push(fvgs, array.get(keptFvgs, j))
 _del_kz(kz k) =>
-    if k._box.size() > MAX_DAYS_KZ
-        k._box.pop().delete()
-    if k._hi_line.size() > MAX_DAYS_KZ
-        k._hi_line.pop().delete()
-        k._lo_line.pop().delete()
+	if k._box.size() > MAX_DAYS_KZ
+		k._box.pop().delete()
+	if k._hi_line.size() > MAX_DAYS_KZ
+		k._hi_line.pop().delete()
+		k._lo_line.pop().delete()
 _manage_kz(kz kobj, bool use, bool t, color c, string box_txt, bool is_backtest) =>
-    if use
-        if t and not t[1]
-            if not backtest_mode
-                while kobj._box.size() > 0
-                    kobj._box.pop().delete()
-                while kobj._hi_line.size() > 0
-                    kobj._hi_line.pop().delete()
-                    kobj._lo_line.pop().delete()
-            color _c = color.new(c, BOX_TRANSPARENCY_KZ)
-            color _t = color.new(c, 75)
-            kobj._box.unshift(box.new(time, high, time, low, xloc = xloc.bar_time, border_color = _c, bgcolor = _c, text = box_txt, text_color = _t, text_size = size.normal))
-            kobj._hi_line.unshift(line.new(time, high, time, high, xloc = xloc.bar_time, style = line.style_solid, color = c, width = 1))
-            kobj._lo_line.unshift(line.new(time, low, time, low, xloc = xloc.bar_time, style = line.style_solid, color = c, width = 1))
-            if is_backtest
-                _del_kz(kobj)
-        if t and kobj._box.size() > 0
-            kobj._box.get(0).set_right(time)
-            kobj._box.get(0).set_top(math.max(kobj._box.get(0).get_top(), high))
-            kobj._box.get(0).set_bottom(math.min(kobj._box.get(0).get_bottom(), low))
-            if kobj._hi_line.size() > 0
-                kobj._hi_line.get(0).set_x2(time)
-                if high > kobj._hi_line.get(0).get_y1()
-                    kobj._hi_line.get(0).set_xy1(time, high)
-                    kobj._hi_line.get(0).set_xy2(time, high)
-                kobj._lo_line.get(0).set_x2(time)
-                if low < kobj._lo_line.get(0).get_y1()
-                    kobj._lo_line.get(0).set_xy1(time, low)
-                    kobj._lo_line.get(0).set_xy2(time, low)
-        if not t and kobj._hi_line.size() > 0
-            kobj._hi_line.get(0).set_x2(time)
-            kobj._lo_line.get(0).set_x2(time)
+	if use
+		if t and not t[1]
+			if not backtest_mode
+				while kobj._box.size() > 0
+					kobj._box.pop().delete()
+				while kobj._hi_line.size() > 0
+					kobj._hi_line.pop().delete()
+					kobj._lo_line.pop().delete()
+			color _c = color.new(c, BOX_TRANSPARENCY_KZ)
+			color _t = color.new(c, 75)
+			kobj._box.unshift(box.new(time, high, time, low, xloc = xloc.bar_time, border_color = _c, bgcolor = _c, text = box_txt, text_color = _t, text_size = size.normal))
+			kobj._hi_line.unshift(line.new(time, high, time, high, xloc = xloc.bar_time, style = line.style_solid, color = c, width = 1))
+			kobj._lo_line.unshift(line.new(time, low, time, low, xloc = xloc.bar_time, style = line.style_solid, color = c, width = 1))
+			if is_backtest
+				_del_kz(kobj)
+		if t and kobj._box.size() > 0
+			kobj._box.get(0).set_right(time)
+			kobj._box.get(0).set_top(math.max(kobj._box.get(0).get_top(), high))
+			kobj._box.get(0).set_bottom(math.min(kobj._box.get(0).get_bottom(), low))
+			if kobj._hi_line.size() > 0
+				kobj._hi_line.get(0).set_x2(time)
+				if high > kobj._hi_line.get(0).get_y1()
+					kobj._hi_line.get(0).set_xy1(time, high)
+					kobj._hi_line.get(0).set_xy2(time, high)
+				kobj._lo_line.get(0).set_x2(time)
+				if low < kobj._lo_line.get(0).get_y1()
+					kobj._lo_line.get(0).set_xy1(time, low)
+					kobj._lo_line.get(0).set_xy2(time, low)
+		if not t and kobj._hi_line.size() > 0
+			kobj._hi_line.get(0).set_x2(time)
+			kobj._lo_line.get(0).set_x2(time)
 [di_plus, di_minus, adxValue] = ta.dmi(dilen, adxlen)
 bool t_calc = not na(time(tf, sweep_calc_session, SESSION_TZ))
 bool t_trade = not na(time(tf, sweep_trade_session, SESSION_TZ))
@@ -292,156 +294,156 @@ array.set(checkStates, 3, check4)
 array.set(checkStates, 4, check5)
 bool is_pagi_local = not na(time(tf, "0600-1759", SESSION_TZ))
 switch strategy_mode
-    "EMA Cross" =>
-        string sessionTargetText = is_pagi_local ? "5. RR 1:2 (PAGI)" : "5. RR 1:3 (MALAM)"
-        headerText := "Checklist: EMA Cross"
-        activeRows := array.from("1. EMA Cross", "2. Valid Pullback", "3. Break of Structure", "4. Entry di FIB 0.57", sessionTargetText)
-        numRows := array.size(activeRows)
-    "Liquidity Run" =>
-        headerText := "Checklist: Liquidity Run"
-        activeRows := liqSweepRunRows
-        numRows := array.size(liqSweepRunRows)
-    "Liquidity Sweep" =>
-        headerText := "Checklist: Liquidity Sweep"
-        activeRows := liqKillzoneRows
-        numRows := array.size(liqKillzoneRows)
-    "EMA Orderblock" =>
-        headerText := "Checklist: EMA Orderblock"
-        activeRows := array.from("1. Identifikasi Tren by EMA", "2. Konfirmasi Fair Value Gap", "3. Reject dan Break by Body", "4. Kondirmasi Candle Searah", "5. Risk to Reward 1:2 atau 1:3")
-        numRows := array.size(activeRows)
-    "Ultimate Setup" =>
-        headerText := "Checklist: Ultimate Setup"
-        activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Reaksi FIB 0.57", "5. Target Sesi")
-        numRows := array.size(activeRows)
-    "Hybrid Setup" =>
-        headerText := "Checklist: Hybrid Setup"
-        activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Reaksi FIB 0.57", "5. Target Sesi")
-        numRows := array.size(activeRows)
+	"EMA Cross" =>
+		string sessionTargetText = is_pagi_local ? "5. RR 1:2 (PAGI)" : "5. RR 1:3 (MALAM)"
+		headerText := "Checklist: EMA Cross"
+		activeRows := array.from("1. EMA Cross", "2. Valid Pullback", "3. Break of Structure", "4. Entry di FIB 0.57", sessionTargetText)
+		numRows := array.size(activeRows)
+	"Liquidity Run" =>
+		headerText := "Checklist: Liquidity Run"
+		activeRows := liqSweepRunRows
+		numRows := array.size(liqSweepRunRows)
+	"Liquidity Sweep" =>
+		headerText := "Checklist: Liquidity Sweep"
+		activeRows := liqKillzoneRows
+		numRows := array.size(liqKillzoneRows)
+	"EMA Orderblock" =>
+		headerText := "Checklist: EMA Orderblock"
+		activeRows := array.from("1. Identifikasi Tren by EMA", "2. Konfirmasi Fair Value Gap", "3. Reject dan Break by Body", "4. Kondirmasi Candle Searah", "5. Risk to Reward 1:2 atau 1:3")
+		numRows := array.size(activeRows)
+	"Ultimate Setup" =>
+		headerText := "Checklist: Ultimate Setup"
+		activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Reaksi FIB 0.57", "5. Target Sesi")
+		numRows := array.size(activeRows)
+	"Hybrid Setup" =>
+		headerText := "Checklist: Hybrid Setup"
+		activeRows := array.from("1. EMA 9 & 21 Cross", "2. Valid Pullback", "3. Break of Structure", "4. Reaksi FIB 0.57", "5. Target Sesi")
+		numRows := array.size(activeRows)
 float ph_pivots = ta.pivothigh(pivot_left_bars, pivot_right_bars)
 float pl_pivots = ta.pivotlow(pivot_left_bars, pivot_right_bars)
 float ph_bos = ta.pivothigh(bos_left_bars, bos_right_bars)
 float pl_bos = ta.pivotlow(bos_left_bars, bos_right_bars)
 if (sesa_active or sesb_active or sesc_active) and not (sesa_active[1] or sesb_active[1] or sesc_active[1]) and show_ema_base
-    last_ph_price := na
-    last_pl_price := na
-    bos_high_price := na
-    bos_low_price := na
-    bos_high_active := false
-    bos_low_active := false
+	last_ph_price := na
+	last_pl_price := na
+	bos_high_price := na
+	bos_low_price := na
+	bos_high_active := false
+	bos_low_active := false
 if timeframe.isintraday
-    if t_as_kz and not t_as_kz[1]
-        as_high_broken_body := false
-        as_low_broken_body := false
-    if t_lo_kz and not t_lo_kz[1]
-        lo_high_broken_body := false
-        lo_low_broken_body := false
-    if t_na_kz and not t_na_kz[1]
-        na_high_broken_body := false
-        na_low_broken_body := false
-    _manage_kz(as_kz, kz_asia_allowed_now, t_as_kz, AS_COLOR, "Asia", backtest_mode)
-    _manage_kz(lo_kz, use_london_kz and show_kz_base, t_lo_kz, LO_COLOR, "London", backtest_mode)
-    _manage_kz(na_kz, use_ny_kz and show_kz_base, t_na_kz, NA_COLOR, "New York", backtest_mode)
-    if is_liquidity_sweep_mode
-        if not t_as_kz and as_kz._hi_line.size() > 0
-            if close > as_kz._hi_line.get(0).get_y1() and not as_high_broken_body
-                clearAllFvgs()
-                as_high_broken_body := false
-                as_low_broken_body := false
-                lo_high_broken_body := false
-                lo_low_broken_body := false
-                na_high_broken_body := false
-                na_low_broken_body := false
-                as_high_broken_body := true
-                fvg_detection_start_time := time
-                alert("Asia High Swept", alert.freq_once_per_bar_close)
-            else if close < as_kz._lo_line.get(0).get_y1() and not as_low_broken_body
-                clearAllFvgs()
-                as_high_broken_body := false
-                as_low_broken_body := false
-                lo_high_broken_body := false
-                lo_low_broken_body := false
-                na_high_broken_body := false
-                na_low_broken_body := false
-                as_low_broken_body := true
-                fvg_detection_start_time := time
-                alert("Asia Low Swept", alert.freq_once_per_bar_close)
-        if not t_lo_kz and lo_kz._hi_line.size() > 0
-            if close > lo_kz._hi_line.get(0).get_y1() and not lo_high_broken_body
-                clearAllFvgs()
-                as_high_broken_body := false
-                as_low_broken_body := false
-                lo_high_broken_body := false
-                lo_low_broken_body := false
-                na_high_broken_body := false
-                na_low_broken_body := false
-                lo_high_broken_body := true
-                fvg_detection_start_time := time
-                alert("London High Swept", alert.freq_once_per_bar_close)
-            else if close < lo_kz._lo_line.get(0).get_y1() and not lo_low_broken_body
-                clearAllFvgs()
-                as_high_broken_body := false
-                as_low_broken_body := false
-                lo_high_broken_body := false
-                lo_low_broken_body := false
-                na_high_broken_body := false
-                na_low_broken_body := false
-                lo_low_broken_body := true
-                fvg_detection_start_time := time
-                alert("London Low Swept", alert.freq_once_per_bar_close)
-        if not t_na_kz and na_kz._hi_line.size() > 0
-            if close > na_kz._hi_line.get(0).get_y1() and not na_high_broken_body
-                clearAllFvgs()
-                as_high_broken_body := false
-                as_low_broken_body := false
-                lo_high_broken_body := false
-                lo_low_broken_body := false
-                na_high_broken_body := false
-                na_low_broken_body := false
-                na_high_broken_body := true
-                fvg_detection_start_time := time
-                alert("New York High Swept", alert.freq_once_per_bar_close)
-            else if close < na_kz._lo_line.get(0).get_y1() and not na_low_broken_body
-                clearAllFvgs()
-                as_high_broken_body := false
-                as_low_broken_body := false
-                lo_high_broken_body := false
-                lo_low_broken_body := false
-                na_high_broken_body := false
-                na_low_broken_body := false
-                na_low_broken_body := true
-                fvg_detection_start_time := time
-                alert("New York Low Swept", alert.freq_once_per_bar_close)
-    bool should_run_fvg_logic = (is_liquidity_sweep_mode or is_ema_ob_mode) and showFairValueGapsInput
-    if should_run_fvg_logic
-        if is_liquidity_sweep_mode
-            bool fvg_bias_bullish_ls = as_low_broken_body or lo_low_broken_body or na_low_broken_body
-            bool fvg_bias_bearish_ls = as_high_broken_body or lo_high_broken_body or na_high_broken_body
-            bool can_detect_fvg_ls = fvg_bias_bullish_ls or fvg_bias_bearish_ls
-            if barstate.isconfirmed and can_detect_fvg_ls
-                detectFVG(fvg_bias_bullish_ls, fvg_bias_bearish_ls)
-        else if is_ema_ob_mode
-            if sesc_active and not sesc_active[1] and not backtest_mode
-                clearAllFvgs()
-            if sesc_active
-                bool fvg_bias_bullish_ob = is_bullish_trend
-                bool fvg_bias_bearish_ob = not is_bullish_trend
-                if barstate.isconfirmed
-                    detectFVG(fvg_bias_bullish_ob, fvg_bias_bearish_ob)
-        manageAndExtendFVGs()
+	if t_as_kz and not t_as_kz[1]
+		as_high_broken_body := false
+		as_low_broken_body := false
+	if t_lo_kz and not t_lo_kz[1]
+		lo_high_broken_body := false
+		lo_low_broken_body := false
+	if t_na_kz and not t_na_kz[1]
+		na_high_broken_body := false
+		na_low_broken_body := false
+	_manage_kz(as_kz, kz_asia_allowed_now, t_as_kz, AS_COLOR, "Asia", backtest_mode)
+	_manage_kz(lo_kz, use_london_kz and show_kz_base, t_lo_kz, LO_COLOR, "London", backtest_mode)
+	_manage_kz(na_kz, use_ny_kz and show_kz_base, t_na_kz, NA_COLOR, "New York", backtest_mode)
+	if is_liquidity_sweep_mode
+		if not t_as_kz and as_kz._hi_line.size() > 0
+			if close > as_kz._hi_line.get(0).get_y1() and not as_high_broken_body
+				clearAllFvgs()
+				as_high_broken_body := false
+				as_low_broken_body := false
+				lo_high_broken_body := false
+				lo_low_broken_body := false
+				na_high_broken_body := false
+				na_low_broken_body := false
+				as_high_broken_body := true
+				fvg_detection_start_time := time
+				alert("Asia High Swept", alert.freq_once_per_bar_close)
+			else if close < as_kz._lo_line.get(0).get_y1() and not as_low_broken_body
+				clearAllFvgs()
+				as_high_broken_body := false
+				as_low_broken_body := false
+				lo_high_broken_body := false
+				lo_low_broken_body := false
+				na_high_broken_body := false
+				na_low_broken_body := false
+				as_low_broken_body := true
+				fvg_detection_start_time := time
+				alert("Asia Low Swept", alert.freq_once_per_bar_close)
+		if not t_lo_kz and lo_kz._hi_line.size() > 0
+			if close > lo_kz._hi_line.get(0).get_y1() and not lo_high_broken_body
+				clearAllFvgs()
+				as_high_broken_body := false
+				as_low_broken_body := false
+				lo_high_broken_body := false
+				lo_low_broken_body := false
+				na_high_broken_body := false
+				na_low_broken_body := false
+				lo_high_broken_body := true
+				fvg_detection_start_time := time
+				alert("London High Swept", alert.freq_once_per_bar_close)
+			else if close < lo_kz._lo_line.get(0).get_y1() and not lo_low_broken_body
+				clearAllFvgs()
+				as_high_broken_body := false
+				as_low_broken_body := false
+				lo_high_broken_body := false
+				lo_low_broken_body := false
+				na_high_broken_body := false
+				na_low_broken_body := false
+				lo_low_broken_body := true
+				fvg_detection_start_time := time
+				alert("London Low Swept", alert.freq_once_per_bar_close)
+		if not t_na_kz and na_kz._hi_line.size() > 0
+			if close > na_kz._hi_line.get(0).get_y1() and not na_high_broken_body
+				clearAllFvgs()
+				as_high_broken_body := false
+				as_low_broken_body := false
+				lo_high_broken_body := false
+				lo_low_broken_body := false
+				na_high_broken_body := false
+				na_low_broken_body := false
+				na_high_broken_body := true
+				fvg_detection_start_time := time
+				alert("New York High Swept", alert.freq_once_per_bar_close)
+			else if close < na_kz._lo_line.get(0).get_y1() and not na_low_broken_body
+				clearAllFvgs()
+				as_high_broken_body := false
+				as_low_broken_body := false
+				lo_high_broken_body := false
+				lo_low_broken_body := false
+				na_high_broken_body := false
+				na_low_broken_body := false
+				na_low_broken_body := true
+				fvg_detection_start_time := time
+				alert("New York Low Swept", alert.freq_once_per_bar_close)
+	bool should_run_fvg_logic = (is_liquidity_sweep_mode or is_ema_ob_mode) and showFairValueGapsInput
+	if should_run_fvg_logic
+		if is_liquidity_sweep_mode
+			bool fvg_bias_bullish_ls = as_low_broken_body or lo_low_broken_body or na_low_broken_body
+			bool fvg_bias_bearish_ls = as_high_broken_body or lo_high_broken_body or na_high_broken_body
+			bool can_detect_fvg_ls = fvg_bias_bullish_ls or fvg_bias_bearish_ls
+			if barstate.isconfirmed and can_detect_fvg_ls
+				detectFVG(fvg_bias_bullish_ls, fvg_bias_bearish_ls)
+		else if is_ema_ob_mode
+			if sesc_active and not sesc_active[1] and not backtest_mode
+				clearAllFvgs()
+			if sesc_active
+				bool fvg_bias_bullish_ob = is_bullish_trend
+				bool fvg_bias_bearish_ob = not is_bullish_trend
+				if barstate.isconfirmed
+					detectFVG(fvg_bias_bullish_ob, fvg_bias_bearish_ob)
+		manageAndExtendFVGs()
 color bull_candle_color = #089981
 color bear_candle_color = #000000
 color neutral_candle_color = #ffffff
 float adx_threshold = sesa_active ? 20.0 : sesb_active ? 25.0 : na
 color candle_color = if (sesa_active or sesb_active) and show_ema_base and use_candle_coloring
-    if adxValue > adx_threshold
-        if di_plus > di_minus
-            bull_candle_color
-        else
-            bear_candle_color
-    else
-        neutral_candle_color
+	if adxValue > adx_threshold
+		if di_plus > di_minus
+			bull_candle_color
+		else
+			bear_candle_color
+	else
+		neutral_candle_color
 else
-    na
+	na
 barcolor(candle_color, title="ADX Trend Candle Color")
 bool is_ema_cross_based_mode = is_ema_ms_mode or is_ultimate_mode or is_hybrid_mode
 bool should_color_emas = (is_ema_cross_based_mode and (sesa_active or sesb_active)) or (is_ema_ob_mode and sesc_active)
@@ -450,237 +452,245 @@ color plot_color2 = is_authorized and should_color_emas and ema2_show ? ema2_col
 plot(ema1_show ? ema1_out_calc : na, title = "EMA 1", color = plot_color1, offset = 0, linewidth = 1)
 plot(ema2_show ? ema2_out_calc : na, title = "EMA 2", color = plot_color2, offset = 0, linewidth = 1)
 if is_authorized
-    if is_ema_ob_mode
-        var int sesc_t = 0
-        var float sesc_max = high
-        var float sesc_min = low
-        if sesc_active
-            if not sesc_active[1]
-                if not backtest_mode
-                    if not na(sesc_main_box)
-                        sesc_main_box.delete()
-                    if not na(sesc_lbl)
-                        sesc_lbl.delete()
-                sesc_t := time
-                sesc_max := high
-                sesc_min := low
-                sesc_main_box := box.new(bar_index, sesc_max, bar_index, sesc_min, bgcolor = color.new(sesc_css, bg_transp), border_color = show_outline ? sesc_css : na, border_style = line.style_dotted)
-                if show_txt
-                    sesc_lbl := label.new(sesc_t, sesc_max, sesc_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.normal)
-            sesc_max := math.max(high, sesc_max)
-            sesc_min := math.min(low, sesc_min)
-            box.set_top(sesc_main_box, sesc_max)
-            box.set_rightbottom(sesc_main_box, bar_index, sesc_min)
-            if show_txt
-                label.set_xy(sesc_lbl, int(math.avg(sesc_t, time)), sesc_max)
-    else
-        if not na(sesc_main_box)
-            sesc_main_box.delete()
-            sesc_lbl.delete()
-            sesc_main_box := na
-            sesc_lbl := na
-    if show_ema_base and not is_ema_ob_mode
-        var label sesa_lbl = na
-        var int sesa_t = 0
-        var float sesa_max = high
-        var float sesa_min = low
-        if sesa_active and not sesa_active[1]
-            sesa_ema_crossed := false
-        if sesa_active and not sesa_ema_crossed and ema_crossed
-            sesa_ema_crossed := true
-        if sesa_active and sesa_ema_crossed
-            if not sesa_ema_crossed[1]
-                if not backtest_mode
-                    if not na(sesa_main_box)
-                        sesa_main_box.delete()
-                    if not na(sesa_lbl)
-                        sesa_lbl.delete()
-                    adx_session_boxes[] boxes_to_del_wrappers = sesa_adx_map.values()
-                    if array.size(boxes_to_del_wrappers) > 0
-                        for i = 0 to array.size(boxes_to_del_wrappers) - 1
-                            wrapper = array.get(boxes_to_del_wrappers, i)
-                            array_inner = wrapper.box_array
-                            if array.size(array_inner) > 0
-                                for j = 0 to array.size(array_inner) - 1
-                                    box.delete(array.get(array_inner, j))
-                    sesa_adx_map.clear()
-                current_sesa_id := time
-                sesa_adx_map.put(current_sesa_id, adx_session_boxes.new(array.new<box>()))
-                sesa_is_drawing_adx := false
-                sesa_t := time
-                sesa_max := high
-                sesa_min := low
-                sesa_main_box := box.new(bar_index, sesa_max, bar_index, sesa_min, bgcolor = color.new(sesa_css, bg_transp), border_color = show_outline ? sesa_css : na, border_style = line.style_dotted)
-                if show_txt
-                    sesa_lbl := label.new(sesa_t, sesa_max, sesa_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.normal)
-            sesa_max := math.max(high, sesa_max)
-            sesa_min := math.min(low, sesa_min)
-            box.set_top(sesa_main_box, sesa_max)
-            box.set_rightbottom(sesa_main_box, bar_index, sesa_min)
-            if show_txt
-                label.set_xy(sesa_lbl, int(math.avg(sesa_t, time)), sesa_max)
-            bool is_adx_weak_pagi = adxValue <= 20
-            adx_session_boxes current_sesa_wrapper = sesa_adx_map.get(current_sesa_id)
-            array<box> current_sesa_boxes = current_sesa_wrapper.box_array
-            if is_adx_weak_pagi and use_adx_overlay and not sesa_is_drawing_adx
-                new_box = box.new(bar_index, sesa_max, bar_index, sesa_min, bgcolor=color.new(color.red, 80), border_color=na)
-                array.push(current_sesa_boxes, new_box)
-                sesa_is_drawing_adx := true
-            if is_adx_weak_pagi and use_adx_overlay and sesa_is_drawing_adx and array.size(current_sesa_boxes) > 0
-                last_box = array.get(current_sesa_boxes, array.size(current_sesa_boxes) - 1)
-                last_box.set_right(bar_index)
-            if not is_adx_weak_pagi or not use_adx_overlay
-                sesa_is_drawing_adx := false
-            if array.size(current_sesa_boxes) > 0
-                for i = 0 to array.size(current_sesa_boxes) - 1
-                    b = array.get(current_sesa_boxes, i)
-                    b.set_top(sesa_max)
-                    b.set_bottom(sesa_min)
-        var label sesb_lbl = na
-        var int sesb_t = 0
-        var float sesb_max = high
-        var float sesb_min = low
-        if sesb_active and not sesb_active[1]
-            sesb_ema_crossed := false
-        if sesb_active and not sesb_ema_crossed and ema_crossed
-            sesb_ema_crossed := true
-        if sesb_active and sesb_ema_crossed
-            if not sesb_ema_crossed[1]
-                if not backtest_mode
-                    if not na(sesb_main_box)
-                        sesb_main_box.delete()
-                    if not na(sesb_lbl)
-                        sesb_lbl.delete()
-                    adx_session_boxes[] boxes_to_del_wrappers = sesb_adx_map.values()
-                    if array.size(boxes_to_del_wrappers) > 0
-                        for i = 0 to array.size(boxes_to_del_wrappers) - 1
-                            wrapper = array.get(boxes_to_del_wrappers, i)
-                            array_inner = wrapper.box_array
-                            if array.size(array_inner) > 0
-                                for j = 0 to array.size(array_inner) - 1
-                                    box.delete(array.get(array_inner, j))
-                    sesb_adx_map.clear()
-                current_sesb_id := time
-                sesb_adx_map.put(current_sesb_id, adx_session_boxes.new(array.new<box>()))
-                sesb_is_drawing_adx := false
-                sesb_t := time
-                sesb_max := high
-                sesb_min := low
-                sesb_main_box := box.new(bar_index, sesb_max, bar_index, sesb_min, bgcolor = color.new(sesb_css, bg_transp), border_color = show_outline ? sesb_css : na, border_style = line.style_dotted)
-                if show_txt
-                    sesb_lbl := label.new(sesb_t, sesb_max, sesb_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.normal)
-            sesb_max := math.max(high, sesb_max)
-            sesb_min := math.min(low, sesb_min)
-            box.set_top(sesb_main_box, sesb_max)
-            box.set_rightbottom(sesb_main_box, bar_index, sesb_min)
-            if show_txt
-                label.set_xy(sesb_lbl, int(math.avg(sesb_t, time)), sesb_max)
-            bool is_adx_weak_malam = adxValue <= 25
-            adx_session_boxes current_sesb_wrapper = sesb_adx_map.get(current_sesb_id)
-            array<box> current_sesb_boxes = current_sesb_wrapper.box_array
-            if is_adx_weak_malam and use_adx_overlay and not sesb_is_drawing_adx
-                new_box = box.new(bar_index, sesb_max, bar_index, sesb_min, bgcolor=color.new(color.red, 80), border_color=na)
-                array.push(current_sesb_boxes, new_box)
-                sesb_is_drawing_adx := true
-            if is_adx_weak_malam and use_adx_overlay and sesb_is_drawing_adx and array.size(current_sesb_boxes) > 0
-                last_box = array.get(current_sesb_boxes, array.size(current_sesb_boxes) - 1)
-                last_box.set_right(bar_index)
-            if not is_adx_weak_malam or not use_adx_overlay
-                sesb_is_drawing_adx := false
-            if array.size(current_sesb_boxes) > 0
-                for i = 0 to array.size(current_sesb_boxes) - 1
-                    b = array.get(current_sesb_boxes, i)
-                    b.set_top(sesb_max)
-                    b.set_bottom(sesb_min)
-        if (sesa_active or sesb_active) and show_pivots_ms
-            if not na(ph_pivots)
-                if not na(last_ph_price)
-                    if ph_pivots > last_ph_price
-                        label.new(bar_index[pivot_right_bars], ph_pivots, "HH", yloc = yloc.abovebar, color = color.new(color.green, 100), textcolor = color.green, style = label.style_none, size = size.small, tooltip = "Higher High")
-                    else
-                        label.new(bar_index[pivot_right_bars], ph_pivots, "LH", yloc = yloc.abovebar, color = color.new(color.red, 100), textcolor = color.red, style = label.style_none, size = size.small, tooltip = "Lower High")
-                else
-                    label.new(bar_index[pivot_right_bars], ph_pivots, "H", yloc = yloc.abovebar, color = color.new(color.gray, 100), textcolor = color.gray, style = label.style_none, size = size.small, tooltip = "High")
-                last_ph_price := ph_pivots
-            if not na(pl_pivots)
-                if not na(last_pl_price)
-                    if pl_pivots < last_pl_price
-                        label.new(bar_index[pivot_right_bars], pl_pivots, "LL", yloc = yloc.belowbar, color = color.new(color.red, 100), textcolor = color.red, style = label.style_none, size = size.small, tooltip = "Lower Low")
-                    else
-                        label.new(bar_index[pivot_right_bars], pl_pivots, "HL", yloc = yloc.belowbar, color = color.new(color.green, 100), textcolor = color.green, style = label.style_none, size = size.small, tooltip = "Higher Low")
-                else
-                    label.new(bar_index[pivot_right_bars], pl_pivots, "L", yloc = yloc.belowbar, color = color.new(color.gray, 100), textcolor = color.gray, style = label.style_none, size = size.small, tooltip = "Low")
-                last_pl_price := pl_pivots
-            if not na(ph_bos)
-                bos_high_price := ph_bos
-                bos_high_index := bar_index[bos_right_bars]
-                bos_high_active := true
-            if not na(pl_bos)
-                bos_low_price := pl_bos
-                bos_low_index := bar_index[bos_right_bars]
-                bos_low_active := true
-            if show_bos
-                bool is_bullish_candle = close > open
-                bool bullish_break_condition = is_bullish_candle and (close - bos_high_price >= 0.5 * (close - open))
-                if bos_high_active and close > bos_high_price and is_bullish_trend and bullish_break_condition
-                    line.new(bos_high_index, bos_high_price, bar_index, bos_high_price, color = color.black, style = line.style_dotted, width = 1)
-                    label.new(int(math.floor(bos_high_index + (bar_index - bos_high_index) / 2)), bos_high_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
-                    bos_high_active := false
-                bool is_bearish_candle = open > close
-                bool bearish_break_condition = is_bearish_candle and (bos_low_price - close >= 0.5 * (open - close))
-                if bos_low_active and close < bos_low_price and not is_bullish_trend and bearish_break_condition
-                    line.new(bos_low_index, bos_low_price, bar_index, bos_low_price, color = color.black, style = line.style_dotted, width = 1)
-                    label.new(int(math.floor(bos_low_index + (bar_index - bos_low_index) / 2)), bos_low_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
-                    bos_low_active := false
-    if lsr_allowed_now
-        if t_calc and not t_calc[1]
-            if not backtest_mode
-                if not na(ls_calc_box)
-                    box.delete(ls_calc_box)
-                if not na(ls_high_line)
-                    line.delete(ls_high_line)
-                if not na(ls_low_line)
-                    line.delete(ls_low_line)
-                if not na(ls_high_label)
-                    label.delete(ls_high_label)
-                if not na(ls_low_label)
-                    label.delete(ls_low_label)
-            ls_calc_box := box.new(bar_index, high, bar_index, low, border_color = liquidity_pivot_color, border_style = line.style_dotted, bgcolor = color.new(liquidity_pivot_color, 90))
-            ls_high_price := high
-            ls_low_price := low
-        else if t_calc
-            box.set_right(ls_calc_box, bar_index)
-            ls_high_price := math.max(ls_high_price, high)
-            ls_low_price := math.min(ls_low_price, low)
-            box.set_top(ls_calc_box, ls_high_price)
-            box.set_bottom(ls_calc_box, ls_low_price)
-        if t_trade and not t_trade[1]
-            if not na(ls_high_price)
-                ls_high_line := line.new(bar_index, ls_high_price, bar_index, ls_high_price, color = liquidity_pivot_color, width = 1)
-                ls_low_line := line.new(bar_index, ls_low_price, bar_index, ls_low_price, color = liquidity_pivot_color, width = 1)
-                ls_high_label := label.new(bar_index, ls_high_price, "High", xloc = xloc.bar_index, style = label.style_label_left, color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
-                ls_low_label := label.new(bar_index, ls_low_price, "Low", xloc = xloc.bar_index, style = label.style_label_left, color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
-        else if t_trade
-            line.set_x2(ls_high_line, bar_index)
-            line.set_x2(ls_low_line, bar_index)
-            label.set_x(ls_high_label, bar_index)
-            label.set_x(ls_low_label, bar_index)
-    else if is_ultimate_mode or is_hybrid_mode
-        if not na(ls_calc_box)
-            box.delete(ls_calc_box)
-        if not na(ls_high_line)
-            line.delete(ls_high_line)
-        if not na(ls_low_line)
-            line.delete(ls_low_line)
-        if not na(ls_high_label)
-            label.delete(ls_high_label)
-        if not na(ls_low_label)
-            label.delete(ls_low_label)
+	if is_ema_ob_mode
+		var int sesc_t = 0
+		var float sesc_max = high
+		var float sesc_min = low
+		if sesc_active
+			if not sesc_active[1]
+				if not backtest_mode
+					if not na(sesc_main_box)
+						sesc_main_box.delete()
+					if not na(sesc_lbl)
+						sesc_lbl.delete()
+				sesc_t := time
+				sesc_max := high
+				sesc_min := low
+				sesc_main_box := box.new(bar_index, sesc_max, bar_index, sesc_min, bgcolor = color.new(sesc_css, bg_transp), border_color = show_outline ? sesc_css : na, border_style = line.style_dotted)
+				if show_txt
+					sesc_lbl := label.new(sesc_t, sesc_max, sesc_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.normal)
+			sesc_max := math.max(high, sesc_max)
+			sesc_min := math.min(low, sesc_min)
+			box.set_top(sesc_main_box, sesc_max)
+			box.set_rightbottom(sesc_main_box, bar_index, sesc_min)
+			if show_txt
+				label.set_xy(sesc_lbl, int(math.avg(sesc_t, time)), sesc_max)
+	else
+		if not na(sesc_main_box)
+			sesc_main_box.delete()
+			sesc_lbl.delete()
+			sesc_main_box := na
+			sesc_lbl := na
+	if show_ema_base and not is_ema_ob_mode
+		var label sesa_lbl = na
+		var int sesa_t = 0
+		var float sesa_max = high
+		var float sesa_min = low
+		if sesa_active and not sesa_active[1]
+			sesa_ema_crossed := false
+			sesa_box_drawn := false // BUG FIX: Reset draw flag for new session
+		if sesa_active and not sesa_ema_crossed and ema_crossed
+			sesa_ema_crossed := true
+		if sesa_active and sesa_ema_crossed
+			if not sesa_box_drawn // BUG FIX: Use reliable flag instead of sesa_ema_crossed[1]
+				if not backtest_mode
+					if not na(sesa_main_box)
+						sesa_main_box.delete()
+					if not na(sesa_lbl)
+						sesa_lbl.delete()
+					adx_session_boxes[] boxes_to_del_wrappers = sesa_adx_map.values()
+					if array.size(boxes_to_del_wrappers) > 0
+						for i = 0 to array.size(boxes_to_del_wrappers) - 1
+							wrapper = array.get(boxes_to_del_wrappers, i)
+							array_inner = wrapper.box_array
+							if array.size(array_inner) > 0
+								for j = 0 to array.size(array_inner) - 1
+									box.delete(array.get(array_inner, j))
+					sesa_adx_map.clear()
+				current_sesa_id := time
+				sesa_adx_map.put(current_sesa_id, adx_session_boxes.new(array.new<box>()))
+				sesa_is_drawing_adx := false
+				sesa_t := time
+				sesa_max := high
+				sesa_min := low
+				sesa_main_box := box.new(bar_index, sesa_max, bar_index, sesa_min, bgcolor = color.new(sesa_css, bg_transp), border_color = show_outline ? sesa_css : na, border_style = line.style_dotted)
+				if show_txt
+					sesa_lbl := label.new(sesa_t, sesa_max, sesa_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.normal)
+				sesa_box_drawn := true // BUG FIX: Set flag to prevent re-drawing in the same session
+			sesa_max := math.max(high, sesa_max)
+			sesa_min := math.min(low, sesa_min)
+			box.set_top(sesa_main_box, sesa_max)
+			box.set_rightbottom(sesa_main_box, bar_index, sesa_min)
+			if show_txt
+				label.set_xy(sesa_lbl, int(math.avg(sesa_t, time)), sesa_max)
+			bool is_adx_weak_pagi = adxValue <= 20
+			adx_session_boxes current_sesa_wrapper = sesa_adx_map.get(current_sesa_id)
+			array<box> current_sesa_boxes = current_sesa_wrapper.box_array
+			if is_adx_weak_pagi and use_adx_overlay and not sesa_is_drawing_adx
+				new_box = box.new(bar_index, sesa_max, bar_index, sesa_min, bgcolor=color.new(color.red, 80), border_color=na)
+				array.push(current_sesa_boxes, new_box)
+				sesa_is_drawing_adx := true
+			if is_adx_weak_pagi and use_adx_overlay and sesa_is_drawing_adx and array.size(current_sesa_boxes) > 0
+				last_box = array.get(current_sesa_boxes, array.size(current_sesa_boxes) - 1)
+				last_box.set_right(bar_index)
+			if not is_adx_weak_pagi or not use_adx_overlay
+				sesa_is_drawing_adx := false
+			if array.size(current_sesa_boxes) > 0
+				for i = 0 to array.size(current_sesa_boxes) - 1
+					b = array.get(current_sesa_boxes, i)
+					b.set_top(sesa_max)
+					b.set_bottom(sesa_min)
+		if sesa_active[1] and not sesa_active and not na(sesa_main_box)
+			box.set_right(sesa_main_box, bar_index[1])
+		var label sesb_lbl = na
+		var int sesb_t = 0
+		var float sesb_max = high
+		var float sesb_min = low
+		if sesb_active and not sesb_active[1]
+			sesb_ema_crossed := false
+			sesb_box_drawn := false // BUG FIX: Reset draw flag for new session
+		if sesb_active and not sesb_ema_crossed and ema_crossed
+			sesb_ema_crossed := true
+		if sesb_active and sesb_ema_crossed
+			if not sesb_box_drawn // BUG FIX: Use reliable flag instead of sesb_ema_crossed[1]
+				if not backtest_mode
+					if not na(sesb_main_box)
+						sesb_main_box.delete()
+					if not na(sesb_lbl)
+						sesb_lbl.delete()
+					adx_session_boxes[] boxes_to_del_wrappers = sesb_adx_map.values()
+					if array.size(boxes_to_del_wrappers) > 0
+						for i = 0 to array.size(boxes_to_del_wrappers) - 1
+							wrapper = array.get(boxes_to_del_wrappers, i)
+							array_inner = wrapper.box_array
+							if array.size(array_inner) > 0
+								for j = 0 to array.size(array_inner) - 1
+									box.delete(array.get(array_inner, j))
+					sesb_adx_map.clear()
+				current_sesb_id := time
+				sesb_adx_map.put(current_sesb_id, adx_session_boxes.new(array.new<box>()))
+				sesb_is_drawing_adx := false
+				sesb_t := time
+				sesb_max := high
+				sesb_min := low
+				sesb_main_box := box.new(bar_index, sesb_max, bar_index, sesb_min, bgcolor = color.new(sesb_css, bg_transp), border_color = show_outline ? sesb_css : na, border_style = line.style_dotted)
+				if show_txt
+					sesb_lbl := label.new(sesb_t, sesb_max, sesb_txt, xloc = xloc.bar_time, textcolor = color.black, style = label.style_label_down, color = color.new(color.white, 100), size = size.normal)
+				sesb_box_drawn := true // BUG FIX: Set flag to prevent re-drawing in the same session
+			sesb_max := math.max(high, sesb_max)
+			sesb_min := math.min(low, sesb_min)
+			box.set_top(sesb_main_box, sesb_max)
+			box.set_rightbottom(sesb_main_box, bar_index, sesb_min)
+			if show_txt
+				label.set_xy(sesb_lbl, int(math.avg(sesb_t, time)), sesb_max)
+			bool is_adx_weak_malam = adxValue <= 25
+			adx_session_boxes current_sesb_wrapper = sesb_adx_map.get(current_sesb_id)
+			array<box> current_sesb_boxes = current_sesb_wrapper.box_array
+			if is_adx_weak_malam and use_adx_overlay and not sesb_is_drawing_adx
+				new_box = box.new(bar_index, sesb_max, bar_index, sesb_min, bgcolor=color.new(color.red, 80), border_color=na)
+				array.push(current_sesb_boxes, new_box)
+				sesb_is_drawing_adx := true
+			if is_adx_weak_malam and use_adx_overlay and sesb_is_drawing_adx and array.size(current_sesb_boxes) > 0
+				last_box = array.get(current_sesb_boxes, array.size(current_sesb_boxes) - 1)
+				last_box.set_right(bar_index)
+			if not is_adx_weak_malam or not use_adx_overlay
+				sesb_is_drawing_adx := false
+			if array.size(current_sesb_boxes) > 0
+				for i = 0 to array.size(current_sesb_boxes) - 1
+					b = array.get(current_sesb_boxes, i)
+					b.set_top(sesb_max)
+					b.set_bottom(sesb_min)
+		if sesb_active[1] and not sesb_active and not na(sesb_main_box)
+			box.set_right(sesb_main_box, bar_index[1])
+		if (sesa_active or sesb_active) and show_pivots_ms
+			if not na(ph_pivots)
+				if not na(last_ph_price)
+					if ph_pivots > last_ph_price
+						label.new(bar_index[pivot_right_bars], ph_pivots, "HH", yloc = yloc.abovebar, color = color.new(color.green, 100), textcolor = color.green, style = label.style_none, size = size.small, tooltip = "Higher High")
+					else
+						label.new(bar_index[pivot_right_bars], ph_pivots, "LH", yloc = yloc.abovebar, color = color.new(color.red, 100), textcolor = color.red, style = label.style_none, size = size.small, tooltip = "Lower High")
+				else
+					label.new(bar_index[pivot_right_bars], ph_pivots, "H", yloc = yloc.abovebar, color = color.new(color.gray, 100), textcolor = color.gray, style = label.style_none, size = size.small, tooltip = "High")
+				last_ph_price := ph_pivots
+			if not na(pl_pivots)
+				if not na(last_pl_price)
+					if pl_pivots < last_pl_price
+						label.new(bar_index[pivot_right_bars], pl_pivots, "LL", yloc = yloc.belowbar, color = color.new(color.red, 100), textcolor = color.red, style = label.style_none, size = size.small, tooltip = "Lower Low")
+					else
+						label.new(bar_index[pivot_right_bars], pl_pivots, "HL", yloc = yloc.belowbar, color = color.new(color.green, 100), textcolor = color.green, style = label.style_none, size = size.small, tooltip = "Higher Low")
+				else
+					label.new(bar_index[pivot_right_bars], pl_pivots, "L", yloc = yloc.belowbar, color = color.new(color.gray, 100), textcolor = color.gray, style = label.style_none, size = size.small, tooltip = "Low")
+				last_pl_price := pl_pivots
+			if not na(ph_bos)
+				bos_high_price := ph_bos
+				bos_high_index := bar_index[bos_right_bars]
+				bos_high_active := true
+			if not na(pl_bos)
+				bos_low_price := pl_bos
+				bos_low_index := bar_index[bos_right_bars]
+				bos_low_active := true
+			if show_bos
+				bool is_bullish_candle = close > open
+				bool bullish_break_condition = is_bullish_candle and (close - bos_high_price >= 0.5 * (close - open))
+				if bos_high_active and close > bos_high_price and is_bullish_trend and bullish_break_condition
+					line.new(bos_high_index, bos_high_price, bar_index, bos_high_price, color = color.black, style = line.style_dotted, width = 1)
+					label.new(int(math.floor(bos_high_index + (bar_index - bos_high_index) / 2)), bos_high_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
+					bos_high_active := false
+				bool is_bearish_candle = open > close
+				bool bearish_break_condition = is_bearish_candle and (bos_low_price - close >= 0.5 * (open - close))
+				if bos_low_active and close < bos_low_price and not is_bullish_trend and bearish_break_condition
+					line.new(bos_low_index, bos_low_price, bar_index, bos_low_price, color = color.black, style = line.style_dotted, width = 1)
+					label.new(int(math.floor(bos_low_index + (bar_index - bos_low_index) / 2)), bos_low_price, "BOS", color = color.new(color.white, 100), style = label.style_none, textcolor = color.black, size = size.small, yloc = yloc.price, textalign = text.align_center)
+					bos_low_active := false
+	if lsr_allowed_now
+		if t_calc and not t_calc[1]
+			if not backtest_mode
+				if not na(ls_calc_box)
+					box.delete(ls_calc_box)
+				if not na(ls_high_line)
+					line.delete(ls_high_line)
+				if not na(ls_low_line)
+					line.delete(ls_low_line)
+				if not na(ls_high_label)
+					label.delete(ls_high_label)
+				if not na(ls_low_label)
+					label.delete(ls_low_label)
+			ls_calc_box := box.new(bar_index, high, bar_index, low, border_color = liquidity_pivot_color, border_style = line.style_dotted, bgcolor = color.new(liquidity_pivot_color, 90))
+			ls_high_price := high
+			ls_low_price := low
+		else if t_calc
+			box.set_right(ls_calc_box, bar_index)
+			ls_high_price := math.max(ls_high_price, high)
+			ls_low_price := math.min(ls_low_price, low)
+			box.set_top(ls_calc_box, ls_high_price)
+			box.set_bottom(ls_calc_box, ls_low_price)
+		if t_trade and not t_trade[1]
+			if not na(ls_high_price)
+				ls_high_line := line.new(bar_index, ls_high_price, bar_index, ls_high_price, color = liquidity_pivot_color, width = 1)
+				ls_low_line := line.new(bar_index, ls_low_price, bar_index, ls_low_price, color = liquidity_pivot_color, width = 1)
+				ls_high_label := label.new(bar_index, ls_high_price, "High", xloc = xloc.bar_index, style = label.style_label_left, color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
+				ls_low_label := label.new(bar_index, ls_low_price, "Low", xloc = xloc.bar_index, style = label.style_label_left, color = color.new(color.white, 100), textcolor = liquidity_pivot_color, size = size.tiny)
+		else if t_trade
+			line.set_x2(ls_high_line, bar_index)
+			line.set_x2(ls_low_line, bar_index)
+			label.set_x(ls_high_label, bar_index)
+			label.set_x(ls_low_label, bar_index)
+	else if is_ultimate_mode or is_hybrid_mode
+		if not na(ls_calc_box)
+			box.delete(ls_calc_box)
+		if not na(ls_high_line)
+			line.delete(ls_high_line)
+		if not na(ls_low_line)
+			line.delete(ls_low_line)
+		if not na(ls_high_label)
+			label.delete(ls_high_label)
+		if not na(ls_low_label)
+			label.delete(ls_low_label)
 if show_alerts and show_ema_base
-    if sesa_active and not sesa_active[1]
-        alert("Sesi PAGI (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
-    if sesb_active and not sesb_active[1]
-        alert("Sesi MALAM (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
+	if sesa_active and not sesa_active[1]
+		alert("Sesi PAGI (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
+	if sesb_active and not sesb_active[1]
+		alert("Sesi MALAM (EMA Cross) telah dimulai.", freq = alert.freq_once_per_bar)
 var table_position = dash_loc == "Bottom Left" ? position.bottom_left : dash_loc == "Top Right" ? position.top_right : dash_loc == "Top Left" ? position.top_left : position.bottom_right
 var table_size = text_size == "Tiny" ? size.tiny : text_size == "Small" ? size.small : size.normal
 color dash_bg_color = color.new(#434651, 20)
@@ -697,77 +707,77 @@ var table access_denied_panel_tl = table.new(position.top_left, 1, 1)
 var table access_denied_panel_tr = table.new(position.top_right, 1, 1)
 var table access_denied_panel_bl = table.new(position.bottom_left, 1, 1)
 drawDashboardTable() =>
-    table.clear(tb, 0, 0, 2, 4)
-    table.cell(tb, 0, 0, "UT Session Status", text_color = dash_text_color, text_size = table_size, text_halign = text.align_center)
-    table.merge_cells(tb, 0, 0, 2, 0)
-    table.cell(tb, 0, 1, "Sesi", text_color = dash_header_text_color, text_size = table_size)
-    table.cell(tb, 1, 1, "Status", text_color = dash_header_text_color, text_size = table_size)
-    table.cell(tb, 2, 1, "Trend", text_color = dash_header_text_color, text_size = table_size)
-    string status_a = sesa_active ? "Aktif" : "Mati"
-    color color_a = sesa_active ? #089981 : color.gray
-    string trend_a = "-"
-    color trend_color_a = color.gray
-    if show_ema_base
-        trend_a := sesa_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
-        trend_color_a := sesa_active ? (is_bullish_trend ? color.green : color.red) : color.gray
-    table.cell(tb, 0, 2, sesa_txt, text_color = pagi_text_css, text_size = table_size)
-    table.cell(tb, 1, 2, status_a, bgcolor = color.new(color_a, 70), text_color = dash_text_color, text_size = table_size)
-    table.cell(tb, 2, 2, trend_a, bgcolor = color.new(trend_color_a, 70), text_color = dash_text_color, text_size = table_size)
-    string status_b = sesb_active ? "Aktif" : "Mati"
-    color color_b = sesb_active ? #089981 : color.gray
-    string trend_b = "-"
-    color trend_color_b = color.gray
-    if show_ema_base
-        trend_b := sesb_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
-        trend_color_b := sesb_active ? (is_bullish_trend ? color.green : color.red) : color.gray
-    table.cell(tb, 0, 3, sesb_txt, text_color = malam_text_css, text_size = table_size)
-    table.cell(tb, 1, 3, status_b, bgcolor = color.new(color_b, 70), text_color = dash_text_color, text_size = table_size)
-    table.cell(tb, 2, 3, trend_b, bgcolor = color.new(trend_color_b, 70), text_color = dash_text_color, text_size = table_size)
-    string status_c = is_ema_ob_mode and sesc_active ? "Aktif" : "Mati"
-    color color_c = is_ema_ob_mode and sesc_active ? #089981 : color.gray
-    string trend_c = "-"
-    color trend_color_c = color.gray
-    if is_ema_ob_mode
-        trend_c := sesc_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
-        trend_color_c := sesc_active ? (is_bullish_trend ? color.green : color.red) : color.gray
-    table.cell(tb, 0, 4, "EMA OB", text_color = ema_ob_text_css, text_size = table_size)
-    table.cell(tb, 1, 4, status_c, bgcolor = color.new(color_c, 70), text_color = dash_text_color, text_size = table_size)
-    table.cell(tb, 2, 4, trend_c, bgcolor = color.new(trend_color_c, 70), text_color = dash_text_color, text_size = table_size)
+	table.clear(tb, 0, 0, 2, 4)
+	table.cell(tb, 0, 0, "UT Session Status", text_color = dash_text_color, text_size = table_size, text_halign = text.align_center)
+	table.merge_cells(tb, 0, 0, 2, 0)
+	table.cell(tb, 0, 1, "Sesi", text_color = dash_header_text_color, text_size = table_size)
+	table.cell(tb, 1, 1, "Status", text_color = dash_header_text_color, text_size = table_size)
+	table.cell(tb, 2, 1, "Trend", text_color = dash_header_text_color, text_size = table_size)
+	string status_a = sesa_active ? "Aktif" : "Mati"
+	color color_a = sesa_active ? #089981 : color.gray
+	string trend_a = "-"
+	color trend_color_a = color.gray
+	if show_ema_base
+		trend_a := sesa_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
+		trend_color_a := sesa_active ? (is_bullish_trend ? color.green : color.red) : color.gray
+	table.cell(tb, 0, 2, sesa_txt, text_color = pagi_text_css, text_size = table_size)
+	table.cell(tb, 1, 2, status_a, bgcolor = color.new(color_a, 70), text_color = dash_text_color, text_size = table_size)
+	table.cell(tb, 2, 2, trend_a, bgcolor = color.new(trend_color_a, 70), text_color = dash_text_color, text_size = table_size)
+	string status_b = sesb_active ? "Aktif" : "Mati"
+	color color_b = sesb_active ? #089981 : color.gray
+	string trend_b = "-"
+	color trend_color_b = color.gray
+	if show_ema_base
+		trend_b := sesb_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
+		trend_color_b := sesb_active ? (is_bullish_trend ? color.green : color.red) : color.gray
+	table.cell(tb, 0, 3, sesb_txt, text_color = malam_text_css, text_size = table_size)
+	table.cell(tb, 1, 3, status_b, bgcolor = color.new(color_b, 70), text_color = dash_text_color, text_size = table_size)
+	table.cell(tb, 2, 3, trend_b, bgcolor = color.new(trend_color_b, 70), text_color = dash_text_color, text_size = table_size)
+	string status_c = is_ema_ob_mode and sesc_active ? "Aktif" : "Mati"
+	color color_c = is_ema_ob_mode and sesc_active ? #089981 : color.gray
+	string trend_c = "-"
+	color trend_color_c = color.gray
+	if is_ema_ob_mode
+		trend_c := sesc_active ? (is_bullish_trend ? "Bullish" : "Bearish") : "-"
+		trend_color_c := sesc_active ? (is_bullish_trend ? color.green : color.red) : color.gray
+	table.cell(tb, 0, 4, "EMA OB", text_color = ema_ob_text_css, text_size = table_size)
+	table.cell(tb, 1, 4, status_c, bgcolor = color.new(color_c, 70), text_color = dash_text_color, text_size = table_size)
+	table.cell(tb, 2, 4, trend_c, bgcolor = color.new(trend_color_c, 70), text_color = dash_text_color, text_size = table_size)
 drawChecklistTable() =>
-    if not na(checklistTable)
-        table.clear(checklistTable, 0, 0, 0, 9)
-        table.cell(checklistTable, column = 0, row = 0, text = " " + headerText + " ", text_size = size.small, text_color = color.black, bgcolor = #b3b3b3, text_halign = text.align_left)
-        for i = 0 to numRows - 1
-            bool isChecked = array.get(checkStates, i)
-            string rowText = array.get(activeRows, i)
-            string displayText = (isChecked ? "✔ " : "✘ ") + rowText
-            color displayColor = isChecked ? #008000 : #8B0000
-            table.cell(checklistTable, column = 0, row = i + 1, text = displayText, text_size = size.small, text_color = displayColor, bgcolor = na, text_halign = text.align_left)
-        if strategy_mode == "EMA Cross"
-            table.cell(checklistTable, column = 0, row = numRows + 1, text = " Maksimal 3 kali Entry ", text_size = size.small, text_color = color.black, bgcolor = #b3b3b3, text_halign = text.align_left)
+	if not na(checklistTable)
+		table.clear(checklistTable, 0, 0, 0, 9)
+		table.cell(checklistTable, column = 0, row = 0, text = " " + headerText + " ", text_size = size.small, text_color = color.black, bgcolor = #b3b3b3, text_halign = text.align_left)
+		for i = 0 to numRows - 1
+			bool isChecked = array.get(checkStates, i)
+			string rowText = array.get(activeRows, i)
+			string displayText = (isChecked ? "✔ " : "✘ ") + rowText
+			color displayColor = isChecked ? #008000 : #8B0000
+			table.cell(checklistTable, column = 0, row = i + 1, text = displayText, text_size = size.small, text_color = displayColor, bgcolor = na, text_halign = text.align_left)
+		if strategy_mode == "EMA Cross"
+			table.cell(checklistTable, column = 0, row = numRows + 1, text = " Maksimal 3 kali Entry ", text_size = size.small, text_color = color.black, bgcolor = #b3b3b3, text_halign = text.align_left)
 drawAuthPanel() =>
-    if not is_authorized
-        string message = is_expired ? "[ INDIKATOR KADALUARSA ]\n--Silakan hubungi Developer--" : "[ INVALID PASSWORD ]\n--Protected by Azchemist System--"
-        table.cell(access_denied_panel_main, 0, 0, message, text_color = color.silver, text_size = size.normal, text_halign = "center", text_valign = "center", bgcolor = color.new(#212529, 20))
-        table.cell(access_denied_panel_tl, 0, 0, "// SYSTEM STATUS: OFFLINE", text_color = color.new(color.black, 0), text_size = size.small, text_halign = "left")
-        table.cell(access_denied_panel_tr, 0, 0, "// AUTHENTICATION: FAILED", text_color = color.new(color.black, 0), text_size = size.small, text_halign = "right")
-        table.cell(access_denied_panel_bl, 0, 0, "// TRACE ID: " + str.tostring(bar_index), text_color = color.new(color.black, 0), text_size = size.small, text_halign = "left")
-    else
-        table.clear(access_denied_panel_main, 0, 0)
-        table.clear(access_denied_panel_tl, 0, 0)
-        table.clear(access_denied_panel_tr, 0, 0)
-        table.clear(access_denied_panel_bl, 0, 0)
+	if not is_authorized
+		string message = is_expired ? "[ INDIKATOR KADALUARSA ]\n--Silakan hubungi Developer--" : "[ INVALID PASSWORD ]\n--Protected by Azchemist System--"
+		table.cell(access_denied_panel_main, 0, 0, message, text_color = color.silver, text_size = size.normal, text_halign = "center", text_valign = "center", bgcolor = color.new(#212529, 20))
+		table.cell(access_denied_panel_tl, 0, 0, "// SYSTEM STATUS: OFFLINE", text_color = color.new(color.black, 0), text_size = size.small, text_halign = "left")
+		table.cell(access_denied_panel_tr, 0, 0, "// AUTHENTICATION: FAILED", text_color = color.new(color.black, 0), text_size = size.small, text_halign = "right")
+		table.cell(access_denied_panel_bl, 0, 0, "// TRACE ID: " + str.tostring(bar_index), text_color = color.new(color.black, 0), text_size = size.small, text_halign = "left")
+	else
+		table.clear(access_denied_panel_main, 0, 0)
+		table.clear(access_denied_panel_tl, 0, 0)
+		table.clear(access_denied_panel_tr, 0, 0)
+		table.clear(access_denied_panel_bl, 0, 0)
 if barstate.islast
-    drawAuthPanel()
-    if is_authorized
-        drawDashboardTable()
-        bool should_display_checklist = show_checklist and not (is_ultimate_mode or is_hybrid_mode)
-        if should_display_checklist
-            if na(checklistTable)
-                checklistTable := table.new(position.bottom_right, columns = 1, rows = 10, border_width = 1, border_color = color.black, frame_width = 1, frame_color = color.black)
-            drawChecklistTable()
-        else if not na(checklistTable)
-            table.delete(checklistTable)
-            checklistTable := na
-    else
-        table.clear(tb, 0, 0, 2, 4)
+	drawAuthPanel()
+	if is_authorized
+		drawDashboardTable()
+		bool should_display_checklist = show_checklist and not (is_ultimate_mode or is_hybrid_mode)
+		if should_display_checklist
+			if na(checklistTable)
+				checklistTable := table.new(position.bottom_right, columns = 1, rows = 10, border_width = 1, border_color = color.black, frame_width = 1, frame_color = color.black)
+			drawChecklistTable()
+		else if not na(checklistTable)
+			table.delete(checklistTable)
+			checklistTable := na
+	else
+		table.clear(tb, 0, 0, 2, 4)
